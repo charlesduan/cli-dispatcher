@@ -55,7 +55,7 @@ class Dispatcher
     if all
       return $0 + " " + signature_string(cmd) + "\n\n" + send(cmd_sym)
     else
-      return send(cmd_sym).split("\n", 2).first
+      return send(cmd_sym).to_s.split("\n", 2).first
     end
   end
 
