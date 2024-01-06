@@ -232,12 +232,31 @@ module Structured
       end
     end
 
+    def line_break(text, len: 80, prefix: '', preserve_lines: false)
+      res = ''
+      strlen = len - prefix.length
+      text = text.gsub("\n", " ") unless preserve_lines
+      while text.length > strlen
+        if text =~ /\A[^\n]{0,#{strlen}}\s+/
+          res << prefix + $&.rstrip + "\n"
+          text = $'
+        else
+          res << prefix + text[0, strlen]
+          text = text[strlen..-1]
+        end
+      end
+      res << prefix + text
+      return res
+    end
+
     #
     # Prints out documentation for this class.
     #
     def explain(io = STDOUT)
       io.puts("Structured Class #{self}:")
-      io.puts("\n" + @class_description) if @class_description
+      if @class_description
+        io.puts("\n" + line_break(@class_description, prefix: '  '))
+      end
       io.puts
 
       @elements.each do |elt, data|
@@ -245,8 +264,10 @@ module Structured
           "  #{elt}: #{describe_type(data[:type])}" + \
           "#{data[:optional] ? ' (optional)' : ''}"
         )
-        io.puts("    #{data[:description]}") if data[:description]
-        io.puts("")
+        if data[:description]
+          io.puts(line_break(data[:description], prefix: '    '))
+        end
+        io.puts()
       end
 
       if @default_element
@@ -254,9 +275,9 @@ module Structured
           "  All other elements: #{describe_type(@default_element[:type])}"
         )
         if @default_element[:description]
-          io.puts("  #{@default_element[:description]}")
+          io.puts(line_break(@default_element[:description], prefix: '    '))
         end
-        io.puts("")
+        io.puts()
       end
 
     end
