@@ -3,11 +3,13 @@ require 'date'
 
 Gem::Specification.new do |s|
     s.name = 'cli-dispatcher'
-    s.version = '1.0.0'
+    s.version = '1.1.0'
     s.date = Date.today.to_s
     s.summary = 'Command-line command dispatcher'
     s.description = <<~EOF
-        Library for creating command-line programs that accept commands
+        Library for creating command-line programs that accept commands. Also
+        includes the Structured class for processing YAML files containing
+        structured data.
     EOF
     s.author = [ 'Charles Duan' ]
     s.email = 'rubygems.org@cduan.com'

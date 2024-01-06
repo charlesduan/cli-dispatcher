@@ -43,9 +43,13 @@ class Dispatcher
         exit(1)
       end
     rescue ArgumentError
-      warn("#{cmd}: wrong number of arguments")
-      warn("Usage: #{signature_string(cmd)}")
-      exit(1)
+      if $!.backtrace_locations.first.base_label == cmd_sym.to_s
+        warn("#{cmd}: wrong number of arguments")
+        warn("Usage: #{signature_string(cmd)}")
+        exit(1)
+      else
+        raise $!
+      end
     end
   end
 
