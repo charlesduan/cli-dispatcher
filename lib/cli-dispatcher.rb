@@ -1,3 +1,5 @@
+require 'optparse'
+
 #
 # Constructs a program that can operate a number of user-provided commands. To
 # use this class, subclass it and define methods of the form:
@@ -13,6 +15,9 @@
 # The first line should be a short description of the command, which will be
 # used in a summary table describing the command.
 #
+# This class incorporates optparse, providing the command setup_options to pass
+# through options specifications.
+#
 class Dispatcher
 
   #
@@ -20,9 +25,23 @@ class Dispatcher
   # appropriate warning is issued and the program terminates.
   #
   def dispatch_argv
+    @options ||= OptionParser.new
+    @options.banner = <<~EOF
+      Usage: #$0 [options] command [arguments...]
+      Run '#$0 help' for a list of commands.
+
+      Options:
+    EOF
+    @options.on_tail('-h', '--help', 'Show this help') do
+      warn(@options)
+      warn("\nCommands:")
+      cmd_help
+      exit 1
+    end
+
+    @options.parse!
     if ARGV.empty?
-      warn("Usage: #$0 [options] command [arguments...]")
-      warn("Run '#$0 help' for a list of commands.")
+      STDERR.puts(@options)
       exit 1
     end
     dispatch(*ARGV)
@@ -102,6 +121,19 @@ class Dispatcher
       s.start_with?("cmd_") ? s.delete_prefix("cmd_") : nil
     }.compact.sort.each do |cmd|
       warn("%-10s %s" % [ cmd, help_string(cmd, all: false) ])
+    end
+  end
+
+
+  #
+  # Receives options, passing them to OptionParser. The options are processed
+  # when dispatch_argv is called.
+  #
+  # The banner and -h/--help options will be added automatically.
+  #
+  def setup_options
+    @options = OptionParser.new do |opts|
+      yield(opts)
     end
   end
 
