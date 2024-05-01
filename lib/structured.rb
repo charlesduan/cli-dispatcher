@@ -95,6 +95,9 @@ module Structured
     # Sets up a class to manage elements. This method is called when
     # Structured is included in the class.
     #
+    # As an implementation note: Information about a Structured class is stored
+    # in instance variables of the class's object.
+    #
     def reset_elements
       @elements = {}
       @default_element = nil
@@ -254,6 +257,8 @@ module Structured
 
       else
         return item if item.is_a?(type)
+
+        # Receive hash values that are to be converted to Structured objects
         if item.is_a?(Hash) && type.include?(Structured)
           return type.new(item, parent)
         end
@@ -330,8 +335,14 @@ module Structured
   # Includes ClassMethods.
   #
   def self.included(base)
-    base.extend(ClassMethods)
-    base.reset_elements
+    if base.is_a?(Class)
+      base.extend(ClassMethods)
+      base.reset_elements
+    end
   end
 
 end
+
+
+
+require_relative 'structured-poly'
