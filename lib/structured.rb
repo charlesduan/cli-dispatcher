@@ -77,7 +77,17 @@ module Structured
   end
 
   #
-  # Methods extended to a Structured class.
+  # Methods extended to a Structured class. A class would typically use the
+  # following methods within its class body:
+  #
+  # * #set_description to set a textual description of the object
+  #
+  # * #element to define expected elements of the input hash
+  #
+  # * #default_element to define processing of unknown element keys
+  #
+  # The #explain method is also useful for printing out documentation for a
+  # Structured class.
   #
   module ClassMethods
 
@@ -123,15 +133,30 @@ module Structured
       @default_element = element_data(*args, **params)
     end
 
+    #
+    # Processes the definition of an element.
+    #
     # @param type The expected type of the element value. This may be:
     #
     # * A class.
+    #
     # * The value +:boolean+, indicating that a boolean is acceptable.
+    #
     # * An array containing a single element being a class, signifying that the
     #   expected type is an array of elements matching that class.
-    # * A hash containing a single +Class => Class+ pair, signifying that the
+    #
+    # * A hash containing a single +Class1 => Class2+ pair, signifying that the
     #   expected type is a hash of key-value pairs matching the indicated
-    #   classes.
+    #   classes. If Class2 is a Structured class, then Class2 objects will have
+    #   their Structured#receive_key method called, with the corresponding
+    #   Class1 object as the argument.
+    #
+    # @param optional Whether the element is optional.
+    #
+    # @param description A text description of the element.
+    #
+    # @param preproc A Proc that will be executed on the element value to
+    # convert it.
     #
     def element_data(
       type,
@@ -168,7 +193,11 @@ module Structured
 
     #
     # Given a hash, extracts all the elements from it and updates the object
-    # accordingly. obj is the object to update, and hash is the data hash.
+    # accordingly. This method is called automatically upon initialization of
+    # the Structured class.
+    #
+    # @param obj the object to update
+    # @param hash the data hash.
     #
     def receive_hash(obj, hash)
       raise "Initializer to #{obj.class} is not a Hash" unless hash.is_a?(Hash)
