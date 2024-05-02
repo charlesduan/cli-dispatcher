@@ -6,13 +6,11 @@ class PolymorphicTest < Minitest::Test
   class Book
     include Structured
     element :title, String
-    attr_reader :title
   end
 
   class Car
     include Structured
     element :model, String
-    attr_reader :model
   end
 
   class Thing

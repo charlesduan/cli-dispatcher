@@ -7,7 +7,6 @@ class StructuredTest < Minitest::Test
   class Book
     include Structured
     element :title, String
-    attr_reader :title
   end
 
   def test_book

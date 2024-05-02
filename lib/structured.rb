@@ -10,16 +10,47 @@
 #
 # * The element is looked for upon initialization
 #
-# * If found, the element is type-checked and possibly converted to a new object
+# * If found, the element's value is type-checked and possibly converted to a
+#   new object. In particular:
 #
-# * A method +convert_[name]+ is defined, taking a single parameter. By default,
-#   the method sets an instance variable +@[name]+ with the parameter value.
-#   Classes may override this method to provide different initialization
+#   * If the expected type is a Structured object, then the value is expected to
+#     be a hash, which is used as input to construct the expected Structured
+#     object. This subsidiary Structured object has its +@parent+ instance
+#     variable set so that a complete two-way tree of objects is maintained.
+#
+#   * If the expected type is an Array of Structured objects, then the value is
+#     expected to be an array of hashes, each of which is converted to the
+#     expected Structured object. The +@parent+ variable is also set.
+#
+#   * If the expected type is a Hash including Structured object, then the value
+#     is similarly converted to a hash of Structured objects. As an added
+#     benefit, besides +@parent+ being set, hash values have the +@key+ instance
+#     variable set, so that the values are aware of the hash key with which they
+#     are associated.
+#
+# * An instance variable +@[element]+ is set to the given value.
+#
+# As a result, at the end of the initialization of a Structured object, it will
+# have instance variables set corresponding to all the defined elements.
+#
+# The above explanation is default behavior, and several customizations are
+# available.
+#
+# * Methods +receive_[element]+ can be defined, taking a single parameter. By
+#   default, the method sets an instance variable +@[name]+ with the parameter
+#   value. Classes may override this method to provide different initialization
 #   actions. (Alternately, classes can accept the default initialization methods
 #   and override #initialize for further processing.)
 #
-# ClassMethods also has class-level methods for producing documentation on the
-# expected elements, type checking, and so on.
+# * Methods receive_parent and receive_key can be similarly redefined to change
+#   the processing of parent Structured objects and hash keys, respectively.
+#
+# * The method +receive_any+ can be defined to handle undefined elements, for
+#   example by placing them in a hash. For these elements, the +@key+ instance
+#   variable is also set for them.
+#
+# Please read the documentation for Structured::ClassMethods for more on
+# defining expected elements, type checking, and so on.
 #
 module Structured
 
@@ -116,8 +147,10 @@ module Structured
     # See element_data for an explanation of +*args+ and +**params+.
     #
     # @param [Symbol] name The name of the element.
+    # @param attr Whether to create an attribute (i.e., call +attr_reader+) for
+    # the given element. Default is true.
     #
-    def element(name, *args, **params)
+    def element(name, *args, attr: true, **params)
       @elements[name.to_sym] = element_data(*args, **params)
       #
       # By default, when an element is received, a corresponding instance
@@ -127,6 +160,7 @@ module Structured
       define_method("receive_#{name}".to_sym) do |item|
         instance_variable_set("@#{name}".to_sym, item)
       end
+      attr_reader(name) if attr
     end
 
     #
@@ -159,7 +193,8 @@ module Structured
     # @param description A text description of the element.
     #
     # @param preproc A Proc that will be executed on the element value to
-    # convert it.
+    # convert it. The proc will be executed in the context of the receiving
+    # object.
     #
     def element_data(
       type,
@@ -206,7 +241,7 @@ module Structured
       raise "Initializer to #{obj.class} is not a Hash" unless hash.is_a?(Hash)
       @elements.each do |elt, data|
         val = hash[elt] || hash[elt.to_s]
-        val = data[:preproc].call(val) if data[:preproc]
+        val = obj.instance_exec(val, &data[:preproc]) if data[:preproc]
         unless val
           next if data[:optional]
           raise(ArgumentError, "#{obj.class} needs key #{elt}")
