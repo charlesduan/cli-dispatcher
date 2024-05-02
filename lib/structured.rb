@@ -1,3 +1,5 @@
+require_relative 'texttools'
+
 #
 # Sets up a class to receive an initializing hash and to populate information
 # about the class from that hash. The expected hash elements are
@@ -45,9 +47,11 @@
 # * Methods receive_parent and receive_key can be similarly redefined to change
 #   the processing of parent Structured objects and hash keys, respectively.
 #
-# * The method +receive_any+ can be defined to handle undefined elements, for
-#   example by placing them in a hash. For these elements, the +@key+ instance
-#   variable is also set for them.
+# * To process unknown elements, call ClassMethods#default_element to specify
+#   their expected type. Then define +receive_any+ to handle undefined elements,
+#   for example by placing them in a hash. For these elements, the +@key+
+#   instance variable is also set for them if the expected type is a Structured
+#   class.
 #
 # Please read the documentation for Structured::ClassMethods for more on
 # defining expected elements, type checking, and so on.
@@ -299,23 +303,6 @@ module Structured
         end
         raise TypeError, "#{item} is not a #{type}" unless item.is_a?(Hash)
       end
-    end
-
-    def line_break(text, len: 80, prefix: '', preserve_lines: false)
-      res = ''
-      strlen = len - prefix.length
-      text = text.gsub("\n", " ") unless preserve_lines
-      while text.length > strlen
-        if text =~ /\A[^\n]{0,#{strlen}}\s+/
-          res << prefix + $&.rstrip + "\n"
-          text = $'
-        else
-          res << prefix + text[0, strlen]
-          text = text[strlen..-1]
-        end
-      end
-      res << prefix + text
-      return res
     end
 
     #
