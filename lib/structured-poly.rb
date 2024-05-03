@@ -81,7 +81,11 @@ module StructuredPolymorphic
       new_hash = hash.dup
       new_hash.delete(@type_key)
       new_hash.delete(@type_key.to_s)
-      type_class.new(new_hash, parent)
+      o = type_class.new(new_hash, parent)
+
+      # Set the type value
+      o.instance_variable_set(:@type, type)
+      return o
     end
   end
 

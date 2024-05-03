@@ -3,7 +3,7 @@ require 'date'
 
 Gem::Specification.new do |s|
     s.name = 'cli-dispatcher'
-    s.version = '1.1.4'
+    s.version = '1.1.5'
     s.date = Date.today.to_s
     s.summary = 'Command-line command dispatcher'
     s.description = <<~EOF

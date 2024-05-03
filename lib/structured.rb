@@ -48,10 +48,11 @@ require_relative 'texttools'
 #   the processing of parent Structured objects and hash keys, respectively.
 #
 # * To process unknown elements, call ClassMethods#default_element to specify
-#   their expected type. Then define +receive_any+ to handle undefined elements,
-#   for example by placing them in a hash. For these elements, the +@key+
-#   instance variable is also set for them if the expected type is a Structured
-#   class.
+#   their expected type. (It should typically be just a class name, as that
+#   method's documentation explains.) Then define +receive_any+ to handle
+#   undefined elements, for example by placing them in a hash. For these
+#   elements, the +@key+ instance variable is also set for them if the expected
+#   type is a Structured class.
 #
 # Please read the documentation for Structured::ClassMethods for more on
 # defining expected elements, type checking, and so on.
@@ -69,6 +70,7 @@ module Structured
   #
   def initialize(hash, parent = nil)
     receive_parent(parent) if parent
+    Structured.trace("New #{self.class} {#{(hash.first || []).join(': ')}...}")
     self.class.receive_hash(self, hash)
   end
 
@@ -168,7 +170,13 @@ module Structured
     end
 
     #
-    # Accepts a default element for this class.
+    # Accepts a default element for this class. The arguments are the same as
+    # those for element_data.
+    #
+    # **Caution**: The type argument should almost always be a single class, and
+    # not a hash. This is because the default arguments are automatically
+    # treated like a hash, with the otherwise-undefined element names being the
+    # keys of the hash.
     #
     def default_element(*args, **params)
       @default_element = element_data(*args, **params)
@@ -245,12 +253,15 @@ module Structured
       raise "Initializer to #{obj.class} is not a Hash" unless hash.is_a?(Hash)
       @elements.each do |elt, data|
         val = hash[elt] || hash[elt.to_s]
-        val = obj.instance_exec(val, &data[:preproc]) if data[:preproc]
         unless val
           next if data[:optional]
           raise(ArgumentError, "#{obj.class} needs key #{elt}")
         end
-        obj.send("receive_#{elt}".to_sym, convert_item(val, data[:type], obj))
+        # Preproc should only be performed when optional elements are present
+        Structured.trace("  Element #{elt} as #{data[:type].inspect}")
+        val = obj.instance_exec(val, &data[:preproc]) if data[:preproc]
+        cval = convert_item(val, data[:type], obj)
+        obj.send("receive_#{elt}".to_sym, cval)
       end
 
       # Process unknown elements
@@ -263,6 +274,9 @@ module Structured
         )
       end
       unknown_elts.each do |elt|
+        Structured.trace(
+          "  Default element #{elt} as #{@default_element[:type].inspect}"
+        )
         val = hash[elt] || hash[elt.to_s]
         val = @default_element[:preproc].call(val) if @default_element[:preproc]
         item = convert_item(val, @default_element[:type], obj)
@@ -283,11 +297,13 @@ module Structured
 
       when Array
         raise TypeError, "#{item} is not Array" unless item.is_a?(Array)
+        Structured.trace("    Converting list of items")
         return item.map { |i| convert_item(i, type.first, parent) }
 
       when Hash
         raise TypeError, "#{item} is not Hash" unless item.is_a?(Hash)
         return item.map { |k, v|
+          Structured.trace("    Converting hash item #{k.inspect}")
           conv_key = convert_item(k, type.first.first, parent)
           conv_item = convert_item(v, type.first.last, parent)
           conv_item.receive_key(conv_key) if conv_item.is_a?(Structured)
@@ -311,7 +327,7 @@ module Structured
     def explain(io = STDOUT)
       io.puts("Structured Class #{self}:")
       if @class_description
-        io.puts("\n" + line_break(@class_description, prefix: '  '))
+        io.puts("\n" + TextTools.line_break(@class_description, prefix: '  '))
       end
       io.puts
 
@@ -351,6 +367,37 @@ module Structured
       else return type.to_s
       end
     end
+
+    #
+    # Produces a template YAML file for this Structured object.
+    def template(indent: '')
+      res = ''
+      if @class_description
+        res << indent
+        res << TextTools.line_break(@class_description, prefix: "#{indent}# ")
+        res << "\n"
+      end
+      @elements.each do |elt, data|
+        res << "#{indent}#{elt}:"
+        res << template_type(data[:type], indent)
+      end
+
+    end
+
+    def template_type(type, indent)
+      res = ''
+      case data[:type]
+      when Structured
+        res << "\n" << data[:type].template(indent: indent + '  ')
+      when Class then res << " # #{data[:type]}\n"
+      when Array
+        res << "\n#{indent}  -" << template_type(type.first, indent + '    ')
+      when Hash
+        res << "\n#{indent}  [#{type.first.first}]:"
+        res << template_type(type.first.last, indent + '    ')
+      end
+      return res
+    end
   end
 
   #
@@ -361,6 +408,16 @@ module Structured
       base.extend(ClassMethods)
       base.reset_elements
     end
+  end
+
+  #
+  # Enable tracing of object creation.
+  #
+  def self.tracing=(bool)
+    @tracing = bool
+  end
+  def self.trace(text)
+    warn(text) if @tracing
   end
 
 end
