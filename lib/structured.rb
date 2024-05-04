@@ -163,10 +163,21 @@ module Structured
       # variable is set. Classes using Structured can override this method after
       # the element declaration to perform other tasks.
       #
-      define_method("receive_#{name}".to_sym) do |item|
-        instance_variable_set("@#{name}".to_sym, item)
+      method_name = "receive_#{name}".to_sym
+      unless method_defined?(method_name)
+        define_method(method_name) do |item|
+          instance_variable_set("@#{name}".to_sym, item)
+        end
       end
-      attr_reader(name) if attr
+      attr_reader(name) if attr && !method_defined?(name)
+    end
+
+    #
+    # Removes an element. Note that the attribute definition if any and the
+    # +receive_[name]+ method are left intact.
+    #
+    def remove_element(name)
+      @elements.delete(name.to_sym)
     end
 
     #
