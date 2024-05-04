@@ -149,6 +149,19 @@ module Structured
     end
 
     #
+    # Returns the class's description. The given number can be used to limit the
+    # length of the description.
+    #
+    def description(len = nil)
+      desc = @class_description || ''
+      if len && desc.length > len
+        return desc[0, 5] if len > 5
+        return desc[0, len - 3] + '...'
+      end
+      return desc
+    end
+
+    #
     # Declares that the class expects an element with the given name and type.
     # See element_data for an explanation of +*args+ and +**params+.
     #
@@ -211,7 +224,8 @@ module Structured
     #   their Structured#receive_key method called, with the corresponding
     #   Class1 object as the argument.
     #
-    # @param optional Whether the element is optional.
+    # @param optional Whether the element is optional. Set to :omit to omit it
+    #   from templates.
     #
     # @param description A text description of the element.
     #
@@ -219,10 +233,12 @@ module Structured
     # convert it. The proc will be executed in the context of the receiving
     # object.
     #
+    # @param default A default value, entered into templates.
+    #
     def element_data(
       type,
       optional: false, description: nil,
-      preproc: nil
+      preproc: nil, default: nil
     )
       # Check the type argument
       case type
@@ -248,8 +264,24 @@ module Structured
         :optional => optional,
         :description => description,
         :preproc => preproc,
+        :default => default
       }
 
+    end
+
+    #
+    # Iterates elements in a useful sorted order.
+    #
+    def each_element
+      @elements.sort_by { |e, data|
+        if data[:optional] == :omit
+          [ 3, e.to_s ]
+        else
+          [ data[:optional] ? 2 : 1, e.to_s ]
+        end
+      }.each do |e, data|
+        yield(e, data)
+      end
     end
 
     #
@@ -342,15 +374,15 @@ module Structured
       end
       io.puts
 
-      @elements.each do |elt, data|
+      each_element do |elt, data|
         io.puts(
           "  #{elt}: #{describe_type(data[:type])}" + \
           "#{data[:optional] ? ' (optional)' : ''}"
         )
         if data[:description]
-          io.puts(line_break(data[:description], prefix: '    '))
+          io.puts(TextTools.line_break(data[:description], prefix: '    '))
+          io.puts()
         end
-        io.puts()
       end
 
       if @default_element
@@ -358,7 +390,9 @@ module Structured
           "  All other elements: #{describe_type(@default_element[:type])}"
         )
         if @default_element[:description]
-          io.puts(line_break(@default_element[:description], prefix: '    '))
+          io.puts(TextTools.line_break(
+            @default_element[:description], prefix: '    '
+          ))
         end
         io.puts()
       end
@@ -382,30 +416,64 @@ module Structured
     #
     # Produces a template YAML file for this Structured object.
     def template(indent: '')
-      res = ''
+      res = "#{indent}# #{name}\n"
       if @class_description
         res << indent
         res << TextTools.line_break(@class_description, prefix: "#{indent}# ")
         res << "\n"
       end
-      @elements.each do |elt, data|
-        res << "#{indent}#{elt}:"
-        res << template_type(data[:type], indent)
-      end
 
+      in_opt = false
+      max_len = @elements.keys.map { |e| e.to_s.length }.max
+
+      each_element do |elt, data|
+        next if data[:optional] == :omit
+        if data[:optional] && !in_opt
+          res << "#{indent}#\n#{indent}# Optional\n"
+          in_opt = true
+        end
+
+        res << "#{indent}#{elt}:"
+        spacing = ' ' * (max_len - elt.to_s.length + 1)
+        if data[:default]
+          res << spacing << data[:default] << "\n"
+        else
+          res << template_type(data[:type], indent, spacing)
+        end
+      end
+      return res
     end
 
-    def template_type(type, indent)
+    #
+    # @param type The Structured data type specification.
+    # @param indent The indent string before new lines.
+    # @param sp Spacing after the colon, if any.
+    def template_type(type, indent, sp = ' ')
       res = ''
-      case data[:type]
-      when Structured
-        res << "\n" << data[:type].template(indent: indent + '  ')
-      when Class then res << " # #{data[:type]}\n"
+      case type
+      when :boolean
+        res << " true/false\n"
+      when Class
+        if type == String
+          res << "#{sp}\"\"\n"
+        elsif type.include?(Structured)
+          res << "\n" << type.template(indent: indent + '  ')
+        else
+          res << "#{sp}# #{type}\n"
+        end
       when Array
-        res << "\n#{indent}  -" << template_type(type.first, indent + '    ')
+        if type.first == String
+          res << "#{sp}[ \"\", ... ]\n"
+        else
+          res << "\n#{indent}  -" << template_type(type.first, indent + '  ')
+        end
       when Hash
-        res << "\n#{indent}  [#{type.first.first}]:"
-        res << template_type(type.first.last, indent + '    ')
+        if type.first.first == String
+          res << "\n#{indent}  \"\":"
+        else
+          res << "\n#{indent}  [#{type.first.first}]:"
+        end
+        res << template_type(type.first.last, indent + '  ')
       end
       return res
     end

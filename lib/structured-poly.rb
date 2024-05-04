@@ -25,7 +25,27 @@ module StructuredPolymorphic
 
     def reset
       @subclasses = {}
+      @class_description = nil
       @type_key = :type
+    end
+
+    #
+    # Provides a description of this class, for use with the #explain method.
+    #
+    def set_description(desc)
+      @class_description = desc
+    end
+
+    #
+    # Returns the class's description. The given number can be used to limit the
+    # length of the description.
+    #
+    def description(len = nil)
+      desc = @class_description || ''
+      if len && desc.length > len
+        return desc[0, 5] if len > 5
+        return desc[0, len - 3] + '...'
+      end
     end
 
     #
@@ -60,6 +80,50 @@ module StructuredPolymorphic
       params.each do |name, subclass|
         type(name, subclass)
       end
+    end
+
+    #
+    # Returns the class corresponding to the given type.
+    #
+    def type_for(name)
+      return @subclasses[name.to_sym]
+    end
+
+    #
+    # Iterates through all the types.
+    #
+    def each
+      @subclasses.sort.each do |type, c| yield(type, c) end
+    end
+
+    #
+    # Prints out documentation for this class.
+    #
+    def explain(io = STDOUT)
+      io.puts("Polymorphic Structured Class #{self}:")
+      if @class_description
+        io.puts("\n" + TextTools.line_break(@class_description, prefix: '  '))
+      end
+      io.puts
+      puts "Available subtypes:"
+      max_type_len = @subclasses.keys.map(&:to_s).map(&:length).max
+      @subclasses.sort.each do |type, c|
+        desc = c.description(80 - max_type_len - 5)
+        desc = c.name if desc == ''
+        io.puts "  #{type.to_s.ljust(max_type_len)}  #{desc}"
+      end
+    end
+
+    def template(indent: '')
+      res = "#{indent}# #{name}\n"
+      if @class_description
+        res << indent
+        res << TextTools.line_break(@class_description, prefix: "#{indent}# ")
+        res << "\n"
+      end
+      res << indent << "type: \n"
+      res << indent << "...\n"
+      return res
     end
 
     #
