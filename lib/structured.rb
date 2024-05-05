@@ -235,10 +235,18 @@ module Structured
     #
     # @param default A default value, entered into templates.
     #
+    # @param check A mechanism for checking for the validity of an element
+    # value. This may be:
+    #
+    # * A Proc, in which case it should return true for valid values.
+    # * An Array of valid values (tested by +===+}).
+    # * Any other object, in which case validity is determined by whether the
+    #   check value +===+ the element value.
+    #
     def element_data(
       type,
       optional: false, description: nil,
-      preproc: nil, default: nil
+      preproc: nil, default: nil, check: nil
     )
       # Check the type argument
       case type
@@ -259,12 +267,19 @@ module Structured
         raise TypeError, "preproc must be a Proc" unless preproc.is_a?(Proc)
       end
 
+      case check
+      when nil, Proc then check_obj = check # Pass through
+      when Array then check_obj = proc { |o| check.any? { |c| c === o } }
+      else check_obj = proc { |o| check === o }
+      end
+
       return {
         :type => type,
         :optional => optional,
         :description => description,
         :preproc => preproc,
-        :default => default
+        :default => default,
+        :check => check
       }
 
     end
@@ -300,10 +315,22 @@ module Structured
           next if data[:optional]
           raise(ArgumentError, "#{obj.class} needs key #{elt}")
         end
+
         # Preproc should only be performed when optional elements are present
         Structured.trace("  Element #{elt} as #{data[:type].inspect}")
         val = obj.instance_exec(val, &data[:preproc]) if data[:preproc]
+        # But preproc can eliminate an optional element
+        unless val
+          next if data[:optional]
+          raise("#{obj.class} preproc deleted non-optional #{elt}")
+        end
         cval = convert_item(val, data[:type], obj)
+
+        # Check for validity after preproc and conversion are run
+        if data[:check] && !data[:check].call(cval)
+          raise "#{obj.class} value #{cval} failed check for #{elt}"
+        end
+
         obj.send("receive_#{elt}".to_sym, cval)
       end
 
