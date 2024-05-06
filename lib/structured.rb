@@ -279,7 +279,7 @@ module Structured
         :description => description,
         :preproc => preproc,
         :default => default,
-        :check => check
+        :check => check_obj,
       }
 
     end
@@ -463,7 +463,7 @@ module Structured
         res << "#{indent}#{elt}:"
         spacing = ' ' * (max_len - elt.to_s.length + 1)
         if data[:default]
-          res << spacing << data[:default] << "\n"
+          res << spacing << data[:default].inspect << "\n"
         else
           res << template_type(data[:type], indent, spacing)
         end

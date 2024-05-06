@@ -25,23 +25,23 @@ class Dispatcher
   # appropriate warning is issued and the program terminates.
   #
   def dispatch_argv
-    @options ||= OptionParser.new
-    @options.banner = <<~EOF
+    @option_parser ||= OptionParser.new
+    @option_parser.banner = <<~EOF
       Usage: #$0 [options] command [arguments...]
       Run '#$0 help' for a list of commands.
 
       Options:
     EOF
-    @options.on_tail('-h', '--help', 'Show this help') do
-      warn(@options)
+    @option_parser.on_tail('-h', '--help', 'Show this help') do
+      warn(@option_parser)
       warn("\nCommands:")
       cmd_help
       exit 1
     end
 
-    @options.parse!
+    @option_parser.parse!
     if ARGV.empty?
-      STDERR.puts(@options)
+      STDERR.puts(@option_parser)
       exit 1
     end
     dispatch(*ARGV)
@@ -132,7 +132,7 @@ class Dispatcher
   # The banner and -h/--help options will be added automatically.
   #
   def setup_options
-    @options = OptionParser.new do |opts|
+    @option_parser = OptionParser.new do |opts|
       yield(opts)
     end
   end
