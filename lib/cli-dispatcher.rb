@@ -26,6 +26,7 @@ class Dispatcher
   #
   def dispatch_argv
     @option_parser ||= OptionParser.new
+    add_options(@option_parser)
     @option_parser.banner = <<~EOF
       Usage: #$0 [options] command [arguments...]
       Run '#$0 help' for a list of commands.
@@ -127,7 +128,9 @@ class Dispatcher
 
   #
   # Receives options, passing them to OptionParser. The options are processed
-  # when dispatch_argv is called.
+  # when dispatch_argv is called. The usage of this method is that after the
+  # Dispatcher object is created, this method is called to instantiate the
+  # options for the class. See #add_options for another way of doing this.
   #
   # The banner and -h/--help options will be added automatically.
   #
@@ -135,6 +138,15 @@ class Dispatcher
     @option_parser = OptionParser.new do |opts|
       yield(opts)
     end
+  end
+
+  #
+  # Given an OptionParser object, add options. By default, this method does
+  # nothing. The usage of this method, in contrast to #setup_options, is to
+  # override this method, invoking calls to the +opts+ argument to add options.
+  # The method will be called automatically when the Dispatcher is invoked.
+  #
+  def add_options(opts)
   end
 
 end
