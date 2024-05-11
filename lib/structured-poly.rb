@@ -42,9 +42,10 @@ module StructuredPolymorphic
     def description(len = nil)
       desc = @class_description || ''
       if len && desc.length > len
-        return desc[0, 5] if len > 5
+        return desc[0, len] if len <= 5
         return desc[0, len - 3] + '...'
       end
+      return desc
     end
 
     #
@@ -101,7 +102,7 @@ module StructuredPolymorphic
         io.puts("\n" + TextTools.line_break(@class_description, prefix: '  '))
       end
       io.puts
-      puts "Available subtypes:"
+      io.puts "Available subtypes:"
       max_type_len = @subclasses.keys.map(&:to_s).map(&:length).max
       @subclasses.sort.each do |type, c|
         desc = c.description(80 - max_type_len - 5)
@@ -135,13 +136,9 @@ module StructuredPolymorphic
       end
 
       type = hash[@type_key] || hash[@type_key.to_s]
-      unless type
-        raise ArgumentError, "#{name} input with no type: #{hash.inspect}"
-      end
+      input_err("no type: #{hash.inspect}") unless type
       type_class = @subclasses[type.to_sym]
-      unless type_class
-        raise ArgumentError, "Unknown #{name} type #{type}"
-      end
+      input_err("Unknown #{name} type #{type}") unless type_class
 
       # Remove the type key when initializing the subclass
       new_hash = hash.dup
@@ -153,7 +150,16 @@ module StructuredPolymorphic
       o.instance_variable_set(:@type, type)
       return o
     end
+
+    def inherited(base)
+      base.include(Structured)
+    end
+
+    def input_err(text)
+      raise Structured::InputError, "#{name}: #{text}"
+    end
   end
+
 
   #
   # Extends ClassMethods to the including class's class methods.

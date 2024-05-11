@@ -60,6 +60,15 @@ require_relative 'texttools'
 module Structured
 
   #
+  # Error class when there is a defect in Structured input. This class will
+  # eventually provide more robust tracing information about where the error
+  # occurred.
+  #
+  class InputError < StandardError
+  end
+
+
+  #
   # Initializes the object based on an initialization hash. All methods that
   # include Structured should retain this initialization signature to the extent
   # possible, because downstream Structured objects expect to be initialized
@@ -162,7 +171,7 @@ module Structured
     def description(len = nil)
       desc = @class_description || ''
       if len && desc.length > len
-        return desc[0, 5] if len > 5
+        return desc[0, len] if len <= 5
         return desc[0, len - 3] + '...'
       end
       return desc
@@ -180,15 +189,12 @@ module Structured
       @elements[name.to_sym] = element_data(*args, **params)
       #
       # By default, when an element is received, a corresponding instance
-      # variable is set. Classes using Structured can override this method after
-      # the element declaration to perform other tasks.
+      # variable is set. Classes using Structured can define +receive_[name]+ so
+      # that the element declaration will perform other tasks.
       #
-      method_name = "receive_#{name}".to_sym
-      unless method_defined?(method_name)
-        define_method(method_name) do |item|
-          instance_variable_set("@#{name}".to_sym, item)
-        end
-      end
+      # This creates the reader attribute only if there is no other method of
+      # the same name.
+      #
       attr_reader(name) if attr && !method_defined?(name)
     end
 
@@ -315,12 +321,13 @@ module Structured
     # @param hash the data hash.
     #
     def receive_hash(obj, hash)
-      raise "Initializer to #{obj.class} is not a Hash" unless hash.is_a?(Hash)
+      input_err("Initializer is not a Hash") unless hash.is_a?(Hash)
+
       @elements.each do |elt, data|
         val = hash[elt] || hash[elt.to_s]
         unless val
           next if data[:optional]
-          raise(ArgumentError, "#{obj.class} needs key #{elt}")
+          input_err("Missing key #{elt}")
         end
 
         # Preproc should only be performed when optional elements are present
@@ -329,26 +336,27 @@ module Structured
         # But preproc can eliminate an optional element
         unless val
           next if data[:optional]
-          raise("#{obj.class} preproc deleted non-optional #{elt}")
+          input_err("Preproc deleted non-optional #{elt}")
         end
         cval = convert_item(val, data[:type], obj)
 
         # Check for validity after preproc and conversion are run
         if data[:check] && !data[:check].call(cval)
-          raise "#{obj.class} value #{cval} failed check for #{elt}"
+          input_err "Value #{cval} failed check for #{elt}"
         end
 
-        obj.send("receive_#{elt}".to_sym, cval)
+        if obj.respond_to?("receive_#{elt}")
+          obj.send("receive_#{elt}".to_sym, cval)
+        else
+          obj.instance_variable_set("@#{elt}", cval)
+        end
       end
 
       # Process unknown elements
       unknown_elts = (hash.keys.map(&:to_sym) - @elements.keys)
       return if unknown_elts.empty?
       unless @default_element
-        raise(
-          NameError,
-          "Unexpected element(s) for #{self}: #{unknown_elts.join(', ')}"
-        )
+        input_err("Unexpected element(s): #{unknown_elts.join(', ')}")
       end
       unknown_elts.each do |elt|
         Structured.trace(
@@ -370,15 +378,15 @@ module Structured
       case type
       when :boolean
         return item if item.is_a?(TrueClass) || item.is_a?(FalseClass)
-        raise TypeError, "#{item} is not boolean"
+        input_err("#{item} is not boolean")
 
       when Array
-        raise TypeError, "#{item} is not Array" unless item.is_a?(Array)
+        input_err("#{item} is not Array") unless item.is_a?(Array)
         Structured.trace("    Converting list of items")
         return item.map { |i| convert_item(i, type.first, parent) }
 
       when Hash
-        raise TypeError, "#{item} is not Hash" unless item.is_a?(Hash)
+        input_err("#{item} is not Hash") unless item.is_a?(Hash)
         return item.map { |k, v|
           Structured.trace("    Converting hash item #{k.inspect}")
           conv_key = convert_item(k, type.first.first, parent)
@@ -397,15 +405,17 @@ module Structured
 
     # Receive hash values that are to be converted to Structured objects
     def convert_structured(item, type, parent)
-      unless item.is_a?(Hash)
-        raise TypeError, "#{item.class} #{item.inspect} not a Structured hash"
-      end
+      input_err("#{item.inspect} not a Structured hash") unless item.is_a?(Hash)
       unless type.include?(Structured) || type.include?(StructuredPolymorphic)
-        raise TypeError, "#{type} is not a Structured class"
+        input_err("#{type} is not a Structured class")
       end
       return type.new(item, parent)
     end
 
+
+    def input_err(text)
+      raise InputError, "#{name}: #{text}"
+    end
 
 
     #
@@ -545,6 +555,7 @@ module Structured
   end
 
 end
+
 
 
 

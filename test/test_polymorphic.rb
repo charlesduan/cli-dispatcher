@@ -3,19 +3,28 @@ require 'structured'
 
 class PolymorphicTest < Minitest::Test
 
-  class Book
-    include Structured
+  class Thing
+    include StructuredPolymorphic
+  end
+
+  class Book < Thing
     element :title, String
   end
 
-  class Car
-    include Structured
+  class Car < Thing
     element :model, String
   end
 
-  class Thing
-    include StructuredPolymorphic
-    types car: Car, book: Book
+  Thing.types car: Car, book: Book
+
+  def test_description
+    text = 'A thing class'
+    Thing.set_description(text)
+    assert_equal(text, Thing.description)
+
+    1.upto(text.length) do |i|
+      assert_equal(i, Thing.description(i).length)
+    end
   end
 
   def test_polymorphic_car
@@ -30,11 +39,24 @@ class PolymorphicTest < Minitest::Test
     assert_equal('Bluebook', t.title)
   end
 
+  def test_polymorphic_explain
+    io = StringIO.new
+    Thing.explain(io)
+    s = io.string
+    assert_match(/Thing/, s)
+    assert_match(/Book/, s)
+    assert_match(/Car/, s)
+  end
+
+  def test_polymorphic_template
+    s = Thing.template
+    assert_match(/type:/, s)
+  end
+
 
   class ThingContainer
     include Structured
     element :things, { String => Thing }
-    attr_reader :things
   end
 
   def test_polymorphic_container
