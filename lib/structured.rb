@@ -539,6 +539,7 @@ module Structured
   def self.tracing=(bool)
     @tracing = bool
   end
+  self.tracing = false
   def self.trace(text)
     warn(text) if @tracing
   end
