@@ -12,7 +12,6 @@
 # what type of Structured object to create.
 #
 module StructuredPolymorphic
-  include Structured
 
   #
   # This should never be called because the +new+ method is overridden.
@@ -65,9 +64,6 @@ module StructuredPolymorphic
     def type(name, subclass)
       unless subclass.include?(Structured)
         raise ArgumentError, "#{subclass} is not Structured"
-      end
-      if subclass.include?(StructuredPolymorphic)
-        raise ArgumentError, "#{subclass} cannot be StructuredPolymorphic"
       end
       @subclasses[name.to_sym] = subclass
     end
@@ -132,6 +128,12 @@ module StructuredPolymorphic
     # constructor.
     #
     def new(hash, parent = nil)
+
+      # For subclasses, don't use this overridden new method.
+      if self.include?(Structured)
+        return super(hash, parent)
+      end
+
       type = hash[@type_key] || hash[@type_key.to_s]
       unless type
         raise ArgumentError, "#{name} input with no type: #{hash.inspect}"

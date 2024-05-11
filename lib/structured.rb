@@ -69,9 +69,16 @@ module Structured
   # @param parent The parent object to this Structured object.
   #
   def initialize(hash, parent = nil)
+    pre_initialize
     receive_parent(parent) if parent
     Structured.trace("New #{self.class} {#{(hash.first || []).join(': ')}...}")
     self.class.receive_hash(self, hash)
+  end
+
+  #
+  # Subclasses may override this method to provide pre-initialization routines.
+  #
+  def pre_initialize
   end
 
   #
@@ -382,14 +389,24 @@ module Structured
 
       else
         return item if item.is_a?(type)
-
-        # Receive hash values that are to be converted to Structured objects
-        if item.is_a?(Hash) && type.include?(Structured)
-          return type.new(item, parent)
-        end
-        raise TypeError, "#{item} is not a #{type}" unless item.is_a?(Hash)
+        # The only remaining hope for conversion is that type is Structured and
+        # item is a hash
+        return convert_structured(item, type, parent)
       end
     end
+
+    # Receive hash values that are to be converted to Structured objects
+    def convert_structured(item, type, parent)
+      unless item.is_a?(Hash)
+        raise TypeError, "#{item.class} #{item.inspect} not a Structured hash"
+      end
+      unless type.include?(Structured) || type.include?(StructuredPolymorphic)
+        raise TypeError, "#{type} is not a Structured class"
+      end
+      return type.new(item, parent)
+    end
+
+
 
     #
     # Prints out documentation for this class.
