@@ -377,7 +377,7 @@ module Structured
           cval = convert_item(val, data[:type], obj)
 
           # Check for validity after preproc and conversion are run
-          if data[:check] && !try_run(data[:check], obj, cval)
+          if data[:check] && !try_run(data[:check], obj, cval, "check")
             input_err "Value #{cval} failed check for #{elt}"
           end
 
@@ -403,7 +403,7 @@ module Structured
             val = try_run(de[:preproc], obj, val, "default preproc")
           end
           item = convert_item(val, de[:type], obj)
-          if de[:check] && !try_run(de[:check], obj, item)
+          if de[:check] && !try_run(de[:check], obj, item, "check")
             input_err "Value #{item} failed default element check"
           end
           item.receive_key(elt) if item.is_a?(Structured)
