@@ -9,6 +9,16 @@ class StructuredTest < Minitest::Test
     element :title, String
   end
 
+  def test_description
+    text = 'A book class'
+    Book.set_description(text)
+    assert_equal(text, Book.description)
+
+    1.upto(text.length) do |i|
+      assert_equal(i, Book.description(i).length)
+    end
+  end
+
   def test_book
     b = Book.new({ 'title' => 'War and Peace' })
     assert_equal('War and Peace', b.instance_variable_get(:@title))
@@ -20,13 +30,22 @@ class StructuredTest < Minitest::Test
   end
 
   def test_book_invalid_param
-    assert_raises(NameError) do
+    assert_raises(Structured::InputError) do
       Book.new({ title: 'War and Peace', :invalid => 123 })
     end
   end
 
+  def test_book_invalid_param_type
+    assert_raises(Structured::InputError) do
+      Book.new({ title: 12 })
+    end
+    assert_raises(Structured::InputError) do
+      Book.new({ title: { title: "Hello world" } })
+    end
+  end
+
   def test_book_missing_param
-    assert_raises(ArgumentError) do
+    assert_raises(Structured::InputError) do
       Book.new({ })
     end
   end
@@ -141,6 +160,132 @@ class StructuredTest < Minitest::Test
     assert_equal 2, a.items[:two]
     assert_equal 3, a.items[:three]
   end
+
+
+  class PreInitializer
+    include Structured
+    element :title, String
+
+    def pre_initialize
+      @actions = [ 'pre-initialize' ]
+    end
+    def receive_parent(parent)
+      @actions.push('receive parent')
+    end
+    def receive_title(title)
+      @actions.push('receive title')
+    end
+    attr_reader :actions
+  end
+
+  def test_preinitialize
+    pi = PreInitializer.new({ :title => 'Title' }, parent = 'hello')
+    assert_equal([
+      'pre-initialize', 'receive parent', 'receive title',
+    ], pi.actions)
+  end
+
+  class CheckItem
+    include Structured
+    element :choice, String, check: %w(a b c d)
+    element :word, String, check: /\A\w+\z/
+    element :opt_no_e, String, optional: true,
+      check: proc { |w| !w.include?('e') }
+  end
+
+  def test_check_success
+    c = CheckItem.new({ choice: 'a', word: 'hello', opt_no_e: 'infinity' })
+    assert_equal('a', c.choice)
+    assert_equal('hello', c.word)
+    assert_equal('infinity', c.opt_no_e)
+
+    c = CheckItem.new({ choice: 'a', word: 'hello' })
+    assert_equal('a', c.choice)
+    assert_equal('hello', c.word)
+  end
+
+  def test_check_fail
+    assert_raises(Structured::InputError) {
+      CheckItem.new({ choice: 'q', word: 'hello', opt_no_e: 'infinity' })
+    }
+    assert_raises(Structured::InputError) {
+      CheckItem.new({ choice: 'a', word: 'hello!', opt_no_e: 'infinity' })
+    }
+    assert_raises(Structured::InputError) {
+      CheckItem.new({ choice: 'a', word: 'hello', opt_no_e: 'infinite' })
+    }
+  end
+
+  class BookShelf
+    include Structured
+    element :kids_books, { Symbol => Book }, optional: true
+    default_element Book
+    def receive_any(name, book)
+      @adult_books[name] = book
+    end
+    def pre_initialize
+      @adult_books = {}
+    end
+    attr_reader :adult_books
+  end
+
+  def test_hierarchy
+    b = BookShelf.new({
+      kids_books: {
+        first: { title: 'Thomas' },
+        second: { title: 'Percy' },
+      }
+    })
+    assert_equal 2, b.kids_books.count
+    assert_equal 0, b.adult_books.count
+    assert_instance_of Book, b.kids_books[:first]
+    assert_equal 'Thomas', b.kids_books[:first].title
+
+    assert_instance_of Book, b.kids_books[:second]
+    assert_equal 'Percy', b.kids_books[:second].title
+  end
+
+  def test_hierarchy_default
+    b = BookShelf.new({
+      first: { title: 'Thomas' },
+      second: { title: 'Percy' },
+    })
+    assert_nil b.kids_books
+    assert_equal 2, b.adult_books.count
+    assert_instance_of Book, b.adult_books[:first]
+    assert_equal 'Thomas', b.adult_books[:first].title
+
+    assert_instance_of Book, b.adult_books[:second]
+    assert_equal 'Percy', b.adult_books[:second].title
+  end
+
+  def test_hierarchy_wrong_class
+    assert_raises(Structured::InputError) {
+      BookShelf.new({ first: "Hello World" })
+    }
+    assert_raises(Structured::InputError) {
+      BookShelf.new({ kids_books: { first: "Hello World" } })
+    }
+
+    assert_raises(Structured::InputError) {
+      BookShelf.new({ kids_books: { first: { notitle: "given" } } })
+    }
+  end
+
+  def test_explain
+    io = StringIO.new
+    BookShelf.explain(io)
+    s = io.string
+    assert_match(/BookShelf/, s)
+    assert_match(/kids_books/, s)
+  end
+
+  def test_template
+    s = BookShelf.template
+    assert_match(/kids_books/, s)
+    assert_match(/title/, s)
+  end
+
 
 end
 
