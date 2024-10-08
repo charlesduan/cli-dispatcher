@@ -135,20 +135,24 @@ module StructuredPolymorphic
         return super(hash, parent)
       end
 
-      type = hash[@type_key] || hash[@type_key.to_s]
-      input_err("no type: #{hash.inspect}") unless type
-      type_class = @subclasses[type.to_sym]
-      input_err("Unknown #{name} type #{type}") unless type_class
+      Structured.trace(self) do
 
-      # Remove the type key when initializing the subclass
-      new_hash = hash.dup
-      new_hash.delete(@type_key)
-      new_hash.delete(@type_key.to_s)
-      o = type_class.new(new_hash, parent)
+        type = hash[@type_key] || hash[@type_key.to_s]
+        input_err("no type") unless type
+        type_class = @subclasses[type.to_sym]
+        input_err("Unknown #{name} type #{type}") unless type_class
 
-      # Set the type value
-      o.instance_variable_set(:@type, type)
-      return o
+        # Remove the type key when initializing the subclass
+        new_hash = hash.dup
+        new_hash.delete(@type_key)
+        new_hash.delete(@type_key.to_s)
+        o = type_class.new(new_hash, parent)
+
+        # Set the type value
+        o.instance_variable_set(:@type, type)
+        return o
+
+      end
     end
 
     def inherited(base)
@@ -156,7 +160,7 @@ module StructuredPolymorphic
     end
 
     def input_err(text)
-      raise Structured::InputError, "#{name}: #{text}"
+      raise Structured::InputError, text
     end
   end
 

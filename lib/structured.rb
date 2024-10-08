@@ -65,6 +65,39 @@ module Structured
   # occurred.
   #
   class InputError < StandardError
+    attr_accessor :structured_stack
+
+    def to_s
+
+      res = [ [ nil, nil ] ]
+
+      @structured_stack.each do |item|
+        if item.is_a?(Class)
+          res.last[0] = item
+        else
+          res.push([ nil, nil ])
+          res.last[1] = item
+        end
+      end
+
+      return res.map { |cls, item|
+        case
+        when item && cls then "\"#{item}\" (#{cls})"
+        when item then "\"#{item}\""
+        when cls then "#{cls}"
+        else nil
+        end
+      }.compact.join(" -> ") + ": " + super
+    end
+
+    def backtrace
+      return []
+    end
+
+    def cause
+      return nil
+    end
+
   end
 
 
@@ -78,10 +111,11 @@ module Structured
   # @param parent The parent object to this Structured object.
   #
   def initialize(hash, parent = nil)
-    pre_initialize
-    receive_parent(parent) if parent
-    Structured.trace("New #{self.class} {#{(hash.first || []).join(': ')}...}")
-    self.class.receive_hash(self, hash)
+    Structured.trace(self.class) do
+      pre_initialize
+      receive_parent(parent) if parent
+      self.class.receive_hash(self, hash)
+    end
   end
 
   #
@@ -324,31 +358,34 @@ module Structured
       input_err("Initializer is not a Hash") unless hash.is_a?(Hash)
 
       @elements.each do |elt, data|
-        val = hash[elt] || hash[elt.to_s]
-        unless val
-          next if data[:optional]
-          input_err("Missing key #{elt}")
-        end
+        Structured.trace(elt.to_s) do
+          val = hash[elt] || hash[elt.to_s]
+          unless val
+            next if data[:optional]
+            input_err("Missing key #{elt}")
+          end
 
-        # Preproc should only be performed when optional elements are present
-        Structured.trace("  Element #{elt} as #{data[:type].inspect}")
-        val = obj.instance_exec(val, &data[:preproc]) if data[:preproc]
-        # But preproc can eliminate an optional element
-        unless val
-          next if data[:optional]
-          input_err("Preproc deleted non-optional #{elt}")
-        end
-        cval = convert_item(val, data[:type], obj)
+          # Preproc should only be performed when optional elements are present
+          if data[:preproc]
+            val = try_run(data[:preproc], obj, val, "preproc")
+          end
+          # But preproc can eliminate an optional element
+          unless val
+            next if data[:optional]
+            input_err("Preproc deleted non-optional #{elt}")
+          end
+          cval = convert_item(val, data[:type], obj)
 
-        # Check for validity after preproc and conversion are run
-        if data[:check] && !data[:check].call(cval)
-          input_err "Value #{cval} failed check for #{elt}"
-        end
+          # Check for validity after preproc and conversion are run
+          if data[:check] && !try_run(data[:check], obj, cval)
+            input_err "Value #{cval} failed check for #{elt}"
+          end
 
-        if obj.respond_to?("receive_#{elt}")
-          obj.send("receive_#{elt}".to_sym, cval)
-        else
-          obj.instance_variable_set("@#{elt}", cval)
+          if obj.respond_to?("receive_#{elt}")
+            obj.send("receive_#{elt}".to_sym, cval)
+          else
+            obj.instance_variable_set("@#{elt}", cval)
+          end
         end
       end
 
@@ -359,14 +396,27 @@ module Structured
         input_err("Unexpected element(s): #{unknown_elts.join(', ')}")
       end
       unknown_elts.each do |elt|
-        Structured.trace(
-          "  Default element #{elt} as #{@default_element[:type].inspect}"
-        )
-        val = hash[elt] || hash[elt.to_s]
-        val = @default_element[:preproc].call(val) if @default_element[:preproc]
-        item = convert_item(val, @default_element[:type], obj)
-        item.receive_key(elt) if item.is_a?(Structured)
-        obj.receive_any(elt, item)
+        Structured.trace(elt.to_s) do
+          de = @default_element
+          val = hash[elt] || hash[elt.to_s]
+          if de[:preproc]
+            val = try_run(de[:preproc], obj, val, "default preproc")
+          end
+          item = convert_item(val, de[:type], obj)
+          if de[:check] && !try_run(de[:check], obj, item)
+            input_err "Value #{item} failed default element check"
+          end
+          item.receive_key(elt) if item.is_a?(Structured)
+          obj.receive_any(elt, item)
+        end
+      end
+    end
+
+    def try_run(block, obj, val, err_name)
+      begin
+        val = obj.instance_exec(val, &block)
+      rescue StandardError => e
+        input_err("#{err_name} failed: #{e.to_s}")
       end
     end
 
@@ -382,17 +432,19 @@ module Structured
 
       when Array
         input_err("#{item} is not Array") unless item.is_a?(Array)
-        Structured.trace("    Converting list of items")
-        return item.map { |i| convert_item(i, type.first, parent) }
+        Structured.trace(Array) do
+          return item.map { |i| convert_item(i, type.first, parent) }
+        end
 
       when Hash
         input_err("#{item} is not Hash") unless item.is_a?(Hash)
         return item.map { |k, v|
-          Structured.trace("    Converting hash item #{k.inspect}")
-          conv_key = convert_item(k, type.first.first, parent)
-          conv_item = convert_item(v, type.first.last, parent)
-          conv_item.receive_key(conv_key) if conv_item.is_a?(Structured)
-          [ conv_key, conv_item ]
+          Structured.trace(Hash) do
+            conv_key = convert_item(k, type.first.first, parent)
+            conv_item = convert_item(v, type.first.last, parent)
+            conv_item.receive_key(conv_key) if conv_item.is_a?(Structured)
+            [ conv_key, conv_item ]
+          end
         }.to_h
 
       else
@@ -414,7 +466,7 @@ module Structured
 
 
     def input_err(text)
-      raise InputError, "#{name}: #{text}"
+      raise InputError, text
     end
 
 
@@ -545,13 +597,20 @@ module Structured
   #
   # Enable tracing of object creation.
   #
-  def self.tracing=(bool)
-    @tracing = bool
+  def self.trace(note)
+    begin
+      @trace_stack.push(note)
+      return yield
+    rescue InputError => e
+      e.structured_stack ||= @trace_stack.dup
+      raise e
+    ensure
+      @trace_stack.pop
+    end
   end
-  self.tracing = false
-  def self.trace(text)
-    warn(text) if @tracing
-  end
+
+  # Stack of traced items
+  @trace_stack = []
 
 end
 
