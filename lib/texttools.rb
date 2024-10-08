@@ -12,7 +12,7 @@ module TextTools
     res = ''
     strlen = len - prefix.length
     text = text.split(/\s*\n\s*\n\s*/).map { |para|
-      preserve_lines ? para : para.gsub("\s*\n\s*", " ")
+      preserve_lines ? para : para.gsub(/\s*\n\s*/, " ")
     }.join("\n\n")
 
     while text.length > strlen

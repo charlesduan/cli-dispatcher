@@ -445,7 +445,6 @@ module Structured
     def template(indent: '')
       res = "#{indent}# #{name}\n"
       if @class_description
-        res << indent
         res << TextTools.line_break(@class_description, prefix: "#{indent}# ")
         res << "\n"
       end
