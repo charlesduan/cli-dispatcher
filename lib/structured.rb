@@ -115,13 +115,23 @@ module Structured
       pre_initialize
       receive_parent(parent) if parent
       self.class.receive_hash(self, hash)
+      post_initialize
     end
   end
 
   #
-  # Subclasses may override this method to provide pre-initialization routines.
+  # Subclasses may override this method to provide pre-initialization routines,
+  # run before the initializing hash is processed.
   #
   def pre_initialize
+  end
+
+  #
+  # Subclasses may override this method to provide post-initialization routines,
+  # run after the initializing hash is processed. This may be useful for global
+  # data checks (that depend on several values).
+  #
+  def post_initialize
   end
 
   #
