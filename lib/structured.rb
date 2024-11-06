@@ -280,7 +280,9 @@ module Structured
     # convert it. The proc will be executed in the context of the receiving
     # object.
     #
-    # @param default A default value, entered into templates.
+    # @param default A default value, entered into templates. The default value
+    # is also used for optional elements that are not specified in an input
+    # hash.
     #
     # @param check A mechanism for checking for the validity of an element
     # value. This may be:
@@ -360,20 +362,13 @@ module Structured
       @elements.each do |elt, data|
         Structured.trace(elt.to_s) do
           val = hash[elt] || hash[elt.to_s]
-          unless val
-            next if data[:optional]
-            input_err("Missing key #{elt}")
-          end
+          next if process_nil_val(obj, elt, val, data)
 
-          # Preproc should only be performed when optional elements are present
           if data[:preproc]
             val = try_run(data[:preproc], obj, val, "preproc")
+            next if process_nil_val(obj, elt, val, data)
           end
-          # But preproc can eliminate an optional element
-          unless val
-            next if data[:optional]
-            input_err("Preproc deleted non-optional #{elt}")
-          end
+
           cval = convert_item(val, data[:type], obj)
 
           # Check for validity after preproc and conversion are run
@@ -381,11 +376,8 @@ module Structured
             input_err "Value #{cval} failed check for #{elt}"
           end
 
-          if obj.respond_to?("receive_#{elt}")
-            obj.send("receive_#{elt}".to_sym, cval)
-          else
-            obj.instance_variable_set("@#{elt}", cval)
-          end
+          # Use the converted value
+          apply_val(obj, elt, cval)
         end
       end
 
@@ -409,6 +401,36 @@ module Structured
           item.receive_key(elt) if item.is_a?(Structured)
           obj.receive_any(elt, item)
         end
+      end
+    end
+
+    # Deals with a nil value (either because no value was given, or because a
+    # preproc deleted it).
+    #
+    # * If val is non-nil, then this method returns false.
+    # * If val is nil and this element is non-optional, then this method raises
+    #   an error.
+    # * If val is nil and the element is optional, *and* the element has a
+    #   default value, then the object has the default value applied to the
+    #   element.
+    # * In any event, if val is nil and the element is optional, returns true
+    #   which should signal to the caller to stop further processing of the
+    #   element.
+    #
+    def process_nil_val(obj, elt, val, data)
+      return false if val
+      input_err("Missing (or preproc deleted) #{elt}") unless data[:optional]
+      apply_val(obj, elt, data[:default]) if data[:default]
+      return true
+    end
+
+    # Applies a value to an element for an object, after all processing for the
+    # value is done.
+    def apply_val(obj, elt, val)
+      if obj.respond_to?("receive_#{elt}")
+        obj.send("receive_#{elt}".to_sym, val)
+      else
+        obj.instance_variable_set("@#{elt}", val)
       end
     end
 
@@ -446,6 +468,18 @@ module Structured
             [ conv_key, conv_item ]
           end
         }.to_h
+
+      when Regexp
+        # Special case in which strings will be converted to Regexps
+        return item if item.is_a?(Regexp)
+        if item.is_a?(String)
+          begin
+            return Regexp.new(item)
+          rescue RegexpError
+            input_err("#{item} is not a valid regular expression")
+          end
+        end
+        input_err("#{type} is not a Regexp")
 
       else
         return item if item.is_a?(type)
