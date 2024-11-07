@@ -71,6 +71,8 @@ module Structured
 
       res = [ [ nil, nil ] ]
 
+      return super unless @structured_stack
+
       @structured_stack.each do |item|
         if item.is_a?(Class)
           res.last[0] = item
@@ -479,20 +481,19 @@ module Structured
           end
         }.to_h
 
-      when Regexp
+      else
+
+        return item if item.is_a?(type)
+
         # Special case in which strings will be converted to Regexps
-        return item if item.is_a?(Regexp)
-        if item.is_a?(String)
+        if type == Regexp && item.is_a?(String)
           begin
             return Regexp.new(item)
           rescue RegexpError
             input_err("#{item} is not a valid regular expression")
           end
         end
-        input_err("#{type} is not a Regexp")
 
-      else
-        return item if item.is_a?(type)
         # The only remaining hope for conversion is that type is Structured and
         # item is a hash
         return convert_structured(item, type, parent)
@@ -501,7 +502,10 @@ module Structured
 
     # Receive hash values that are to be converted to Structured objects
     def convert_structured(item, type, parent)
-      input_err("#{item.inspect} not a Structured hash") unless item.is_a?(Hash)
+      unless item.is_a?(Hash)
+        input_err("#{item.inspect} not a #{type} or Structured hash")
+      end
+
       unless type.include?(Structured) || type.include?(StructuredPolymorphic)
         input_err("#{type} is not a Structured class")
       end
