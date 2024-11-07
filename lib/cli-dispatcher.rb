@@ -15,7 +15,8 @@ require 'optparse'
 # The first line should be a short description of the command, which will be
 # used in a summary table describing the command.
 #
-# This class incorporates optparse, providing the command setup_options to pass
+# This class incorporates optparse, providing the commands setup_options and
+# add_options to pass
 # through options specifications.
 #
 class Dispatcher
@@ -125,8 +126,42 @@ class Dispatcher
     end
   end
 
-
   #
+  # Adds commands relevant when this dispatcher uses Structured data inputs.
+  #
+  def self.add_structured_commands
+    def help_explain
+      return <<~EOF
+        Displays an explanation of a Structured class.
+
+        Use this to assist in generating or checking a Rubric file.
+      EOF
+    end
+
+    def cmd_explain(class_name)
+      c = Object.const_get(class_name)
+      unless c.is_a?(Class) && c.include?(Structured)
+        raise "Invalid class #{class_name}"
+      end
+      c.explain
+    end
+
+    def help_template
+      return <<~EOF
+        Produces a template for the given Structured class.
+      EOF
+    end
+
+    def cmd_template(class_name)
+      c = Object.const_get(class_name)
+      unless c.is_a?(Class) && c.include?(Structured)
+        raise("Invalid class #{class_name}")
+      end
+      puts c.template
+    end
+  end
+
+
   # Receives options, passing them to OptionParser. The options are processed
   # when dispatch_argv is called. The usage of this method is that after the
   # Dispatcher object is created, this method is called to instantiate the

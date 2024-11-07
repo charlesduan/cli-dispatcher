@@ -180,6 +180,13 @@ module Structured
   end
 
   #
+  # Raises an InputError.
+  #
+  def input_err(text)
+    raise InputError, text
+  end
+
+  #
   # Methods extended to a Structured class. A class would typically use the
   # following methods within its class body:
   #
@@ -537,6 +544,9 @@ module Structured
     end
 
 
+    #
+    # Raises an InputError.
+    #
     def input_err(text)
       raise InputError, text
     end
