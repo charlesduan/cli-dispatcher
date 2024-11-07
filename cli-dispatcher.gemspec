@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
     s.version = '1.1.8'
     s.date = Date.today.to_s
     s.summary = 'Command-line command dispatcher'
-    s.required_ruby_version = '>= 2.26.0'
+    s.required_ruby_version = '>= 2.6.0'
     s.description = <<~EOF
         Library for creating command-line programs that accept commands. Also
         includes the Structured class for processing YAML files containing

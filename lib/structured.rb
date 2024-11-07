@@ -149,6 +149,8 @@ module Structured
     @parent = parent
   end
 
+  attr_reader :parent
+
   #
   # Processes the key object for this Structured class. The key is automatically
   # given when this Structured object is a subsidiary of another, within a
@@ -161,6 +163,8 @@ module Structured
   def receive_key(key)
     @key = key
   end
+
+  attr_reader :key
 
   #
   # Processes an undefined element in the initializing hash. By default, this
@@ -432,7 +436,7 @@ module Structured
     def process_nil_val(obj, elt, val, data)
       return false if val
       input_err("Missing (or preproc deleted) #{elt}") unless data[:optional]
-      apply_val(obj, elt, data[:default]) if data[:default]
+      apply_val(obj, elt, data[:default]) unless data[:default].nil?
       return true
     end
 
@@ -460,6 +464,9 @@ module Structured
     #
     def convert_item(item, type, parent)
       case type
+        #
+        # In the when cases, the type is not just a class object
+        #
       when :boolean
         return item if item.is_a?(TrueClass) || item.is_a?(FalseClass)
         input_err("#{item} is not boolean")
@@ -483,21 +490,38 @@ module Structured
 
       else
 
-        return item if item.is_a?(type)
+        #
+        # In these cases, the type is a class object. It can't be tested with
+        # the === operator of a case/when.
+        #
+        # If the item can be automatically coverted to the expected type
+        citem = try_autoconvert(type, item)
 
-        # Special case in which strings will be converted to Regexps
-        if type == Regexp && item.is_a?(String)
-          begin
-            return Regexp.new(item)
-          rescue RegexpError
-            input_err("#{item} is not a valid regular expression")
-          end
-        end
+        # If the item is of the expected type, then return it
+        return citem if citem.is_a?(type)
 
         # The only remaining hope for conversion is that type is Structured and
         # item is a hash
-        return convert_structured(item, type, parent)
+        return convert_structured(citem, type, parent)
       end
+    end
+
+    def try_autoconvert(type, item)
+
+      if type == String && item.is_a?(Symbol)
+        return item.to_s
+      end
+
+      # Special case in which strings will be converted to Regexps
+      if type == Regexp && item.is_a?(String)
+        begin
+          return Regexp.new(item)
+        rescue RegexpError
+          input_err("#{item} is not a valid regular expression")
+        end
+      end
+
+      return item
     end
 
     # Receive hash values that are to be converted to Structured objects
