@@ -8,13 +8,16 @@ module TextTools
   # However, two consecutive line breaks are always preserved, treating them as
   # paragraph breaks. Line breaks at the end of the text are never preserved.
   #
-  def line_break(text, len: 80, prefix: '', preserve_lines: false)
+  def line_break(
+    text, len: 80, prefix: '', first_prefix: nil, preserve_lines: false
+  )
     res = ''
-    strlen = len - prefix.length
     text = text.split(/\s*\n\s*\n\s*/).map { |para|
       preserve_lines ? para : para.gsub(/\s*\n\s*/, " ")
     }.join("\n\n")
 
+    cur_prefix = first_prefix || prefix
+    strlen = len - cur_prefix.length
     while text.length > strlen
       if (m = /\A([^\n]{0,#{strlen}})(\s+)/.match(text))
         res << prefix + m[1]
@@ -24,12 +27,14 @@ module TextTools
         res << prefix + text[0, strlen] + "\n"
         text = text[strlen..-1]
       end
+      cur_prefix = prefix
+      strlen = len - cur_prefix.length
     end
 
     # If there's no text left, then there were trailing spaces and the final \n
     # is superfluous.
     if text.length > 0
-      res << prefix + text
+      res << cur_prefix + text
     else
       res.rstrip!
     end
