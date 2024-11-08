@@ -287,6 +287,52 @@ class StructuredTest < Minitest::Test
   end
 
 
+  class DefaultValues
+    include Structured
+
+    element :optval, String, optional: true, default: "default value"
+  end
+
+  def test_default_values_given
+    dv = DefaultValues.new({ optval: "given value" })
+    assert_equal "given value", dv.optval
+  end
+
+  def test_default_values_inferred
+    dv = DefaultValues.new({})
+    assert_equal "default value", dv.optval
+  end
+
+  def test_default_values_checks_type
+    assert_raises(Structured::InputError) {
+      DefaultValues.new({ optval: 15 })
+    }
+  end
+
+
+  class AutoConversion
+    include Structured
+    element :regexp, Regexp, optional: true
+    element :str, String, optional: true
+    element :table, { String => Integer }, optional: true
+  end
+
+  def test_autoconv_regexp
+    ac = AutoConversion.new({ regexp: "abc\\s+def" })
+    assert_equal(/abc\s+def/, ac.regexp)
+  end
+
+  def test_autoconv_string
+    ac = AutoConversion.new({ :str => :symbol })
+    assert_equal("symbol", ac.str)
+  end
+
+  def test_autoconv_hash_string
+    ac = AutoConversion.new({ :table => { :key => 15 } })
+    assert_equal([ 'key' ], ac.table.keys)
+  end
+
+
 end
 
 

@@ -6,7 +6,7 @@ module TextTools
   # Breaks a text into lines of a given length. If preserve_lines is set, then
   # all line breaks are preserved; otherwise line breaks are treated as spaces.
   # However, two consecutive line breaks are always preserved, treating them as
-  # paragraph breaks.
+  # paragraph breaks. Line breaks at the end of the text are never preserved.
   #
   def line_break(text, len: 80, prefix: '', preserve_lines: false)
     res = ''
@@ -16,15 +16,24 @@ module TextTools
     }.join("\n\n")
 
     while text.length > strlen
-      if text =~ /\A[^\n]{0,#{strlen}}\s+/
-        res << prefix + $&.rstrip + "\n"
-        text = $'
+      if (m = /\A([^\n]{0,#{strlen}})(\s+)/.match(text))
+        res << prefix + m[1]
+        res << (m[2].include?("\n") ? m[2].gsub(/[^\n]/, '') : "\n")
+        text = m.post_match
       else
-        res << prefix + text[0, strlen]
+        res << prefix + text[0, strlen] + "\n"
         text = text[strlen..-1]
       end
     end
-    res << prefix + text
+
+    # If there's no text left, then there were trailing spaces and the final \n
+    # is superfluous.
+    if text.length > 0
+      res << prefix + text
+    else
+      res.rstrip!
+    end
+
     return res
   end
 
@@ -67,11 +76,11 @@ module TextTools
   # @param legal Whether to use legal ordinals (2d, 3d)
   #
   def ordinal(num, legal: true)
-    case num
-    when /1\d$/ then "#{num}th"
-    when /1$/ then "#{num}st"
-    when /2$/ then legal ? "#{num}d" : "#{num}nd"
-    when /3$/ then legal ? "#{num}d" : "#{num}rd"
+    case num.to_s
+    when /1\d\z/ then "#{num}th"
+    when /1\z/ then "#{num}st"
+    when /2\z/ then legal ? "#{num}d" : "#{num}nd"
+    when /3\z/ then legal ? "#{num}d" : "#{num}rd"
     else "#{num}th"
     end
   end
