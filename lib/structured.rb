@@ -1,4 +1,5 @@
 require_relative 'texttools'
+require 'yaml'
 
 #
 # Sets up a class to receive an initializing hash and to populate information
@@ -116,7 +117,7 @@ module Structured
     Structured.trace(self.class) do
       pre_initialize
       receive_parent(parent) if parent
-      self.class.receive_hash(self, hash)
+      self.class.build_from_hash(self, hash)
       post_initialize
     end
   end
@@ -379,8 +380,9 @@ module Structured
     # @param obj the object to update
     # @param hash the data hash.
     #
-    def receive_hash(obj, hash)
+    def build_from_hash(obj, hash)
       input_err("Initializer is not a Hash") unless hash.is_a?(Hash)
+      hash = try_read_file(hash)
 
       @elements.each do |elt, data|
         Structured.trace(elt.to_s) do
@@ -424,6 +426,27 @@ module Structured
           item.receive_key(elt) if item.is_a?(Structured)
           obj.receive_any(elt, item)
         end
+      end
+    end
+
+    #
+    # If the hash contains a key :read_file, then try reading a file containing
+    # additional keys, and return a new hash merging the two. This will not work
+    # recursively; the input file may not further contain a :read_file key.
+    #
+    # If the given hash and the :read_file hash contain duplicate keys, the
+    # given hash overrides the file values.
+    #
+    def try_read_file(hash)
+      file = hash['read_file'] || hash[:read_file]
+      return hash unless file
+      begin
+        res = YAML.load_file(file).merge(hash)
+        res.delete('read_file')
+        res.delete(:read_file)
+        return res
+      rescue
+        input_err("Failed to read Structured YAML input from #{file}: #$!")
       end
     end
 
