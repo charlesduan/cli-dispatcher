@@ -504,19 +504,25 @@ module Structured
       when Array
         input_err("#{item} is not Array") unless item.is_a?(Array)
         Structured.trace(Array) do
-          return item.map { |i| convert_item(i, type.first, parent) }
+          return item.map.with_index { |i, idx|
+            Structured.trace(idx) do
+              convert_item(i, type.first, parent)
+            end
+          }
         end
 
       when Hash
         input_err("#{item} is not Hash") unless item.is_a?(Hash)
-        return item.map { |k, v|
-          Structured.trace(Hash) do
-            conv_key = convert_item(k, type.first.first, parent)
-            conv_item = convert_item(v, type.first.last, parent)
-            conv_item.receive_key(conv_key) if conv_item.is_a?(Structured)
-            [ conv_key, conv_item ]
-          end
-        }.to_h
+        Structured.trace(Hash) do
+          return item.map { |k, v|
+            Structured.trace(k.to_s) do
+              conv_key = convert_item(k, type.first.first, parent)
+              conv_item = convert_item(v, type.first.last, parent)
+              conv_item.receive_key(conv_key) if conv_item.is_a?(Structured)
+              [ conv_key, conv_item ]
+            end
+          }.to_h
+        end
 
       else
 

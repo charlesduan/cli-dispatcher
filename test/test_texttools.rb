@@ -13,6 +13,18 @@ class TextToolsTest < Minitest::Test
     assert_equal("*Line\n*Break", line_break("Line Break", len: 6, prefix: '*'))
   end
 
+  def test_line_break_first_prefix
+    assert_equal("- Line\n  Break", line_break(
+      "Line Break", len: 8, prefix: "  ", first_prefix: "- "
+    ))
+  end
+
+  def test_line_break_first_prefix_one_line
+    assert_equal("- Line", line_break(
+      "Line", len: 8, prefix: "  ", first_prefix: "- "
+    ))
+  end
+
   def test_line_break_short
     assert_equal("Line\nBrea\nk", line_break("Line Break", len: 4))
     assert_equal("Lin\ne\nBre\nak", line_break("Line Break", len: 3))

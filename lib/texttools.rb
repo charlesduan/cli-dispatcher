@@ -20,11 +20,11 @@ module TextTools
     strlen = len - cur_prefix.length
     while text.length > strlen
       if (m = /\A([^\n]{0,#{strlen}})(\s+)/.match(text))
-        res << prefix + m[1]
+        res << cur_prefix + m[1]
         res << (m[2].include?("\n") ? m[2].gsub(/[^\n]/, '') : "\n")
         text = m.post_match
       else
-        res << prefix + text[0, strlen] + "\n"
+        res << cur_prefix + text[0, strlen] + "\n"
         text = text[strlen..-1]
       end
       cur_prefix = prefix
