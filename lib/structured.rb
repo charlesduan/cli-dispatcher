@@ -172,7 +172,8 @@ module Structured
   # raises an error, but classes may override this method to use the undefined
   # elements.
   #
-  # @param element The unknown element name, converted to a symbol.
+  # @param element The unknown element name. For a YAML file, this is typically
+  # a string.
   #
   # @param val The value associated with the unknown element.
   #
@@ -212,6 +213,7 @@ module Structured
     def reset_elements
       @elements = {}
       @default_element = nil
+      @default_key = nil
       @class_description = nil
     end
 
@@ -266,14 +268,32 @@ module Structured
 
     #
     # Accepts a default element for this class. The arguments are the same as
-    # those for element_data.
+    # those for element_data except as noted below.
     #
-    # **Caution**: The type argument should almost always be a single class, and
-    # not a hash. This is because the default arguments are automatically
+    # If this method is called, then for any keys found in an input hash that
+    # have no corresponding #element declaration in the Structured class, the
+    # method receive_any will be invoked. The value from the input hash
+    # will be processed based on any type declaration, `preproc`, and `check`
+    # given to default_element.
+    #
+    # The default element keys can be processed based on the argument `key`,
+    # which should be a hash corresponding to the element_data arguments plus
+    # the key :type with the default key's expected type. If `key` is not given,
+    # then the key must be and is automatically converted to a Symbol.
+    #
+    # **Caution**: The `type` argument should almost always be a single class,
+    # and not a hash. This is because the default arguments are automatically
     # treated like a hash, with the otherwise-undefined element names being the
     # keys of the hash.
     #
     def default_element(*args, **params)
+      if (key_params = params.delete(:key))
+        @default_key = element_data(
+          key_params.delete(:type) || Object, key_params
+        )
+      else
+        @default_key = element_data(Symbol, preproc: proc { |s| s.to_sym })
+      end
       @default_element = element_data(*args, **params)
     end
 
@@ -384,47 +404,28 @@ module Structured
       input_err("Initializer is not a Hash") unless hash.is_a?(Hash)
       hash = try_read_file(hash)
 
-      @elements.each do |elt, data|
-        Structured.trace(elt.to_s) do
-          val = hash[elt] || hash[elt.to_s]
-          next if process_nil_val(obj, elt, val, data)
-
-          if data[:preproc]
-            val = try_run(data[:preproc], obj, val, "preproc")
-            next if process_nil_val(obj, elt, val, data)
-          end
-
-          cval = convert_item(val, data[:type], obj)
-
-          # Check for validity after preproc and conversion are run
-          if data[:check] && !try_run(data[:check], obj, cval, "check")
-            input_err "Value #{cval} failed check for #{elt}"
-          end
-
-          # Use the converted value
-          apply_val(obj, elt, cval)
+      @elements.each do |key, data|
+        Structured.trace(key.to_s) do
+          val = hash[key] || hash[key.to_s]
+          cval = process_value(obj, val, data)
+          apply_val(obj, key, cval) if cval
         end
       end
 
       # Process unknown elements
-      unknown_elts = (hash.keys.map(&:to_sym) - @elements.keys)
-      return if unknown_elts.empty?
+      unknown_keys = hash.keys.reject { |k| @elements.include?(k.to_sym) }
+      return if unknown_keys.empty?
       unless @default_element
-        input_err("Unexpected element(s): #{unknown_elts.join(', ')}")
+        input_err("Unexpected element(s): #{unknown_keys.join(', ')}")
       end
-      unknown_elts.each do |elt|
-        Structured.trace(elt.to_s) do
-          de = @default_element
-          val = hash[elt] || hash[elt.to_s]
-          if de[:preproc]
-            val = try_run(de[:preproc], obj, val, "default preproc")
-          end
-          item = convert_item(val, de[:type], obj)
-          if de[:check] && !try_run(de[:check], obj, item, "check")
-            input_err "Value #{item} failed default element check"
-          end
-          item.receive_key(elt) if item.is_a?(Structured)
-          obj.receive_any(elt, item)
+      unknown_keys.each do |key|
+        Structured.trace(key.to_s) do
+          val = hash[key]
+          ckey = process_value(obj, key, @default_key)
+          cval = process_value(obj, val, @default_element)
+          next unless cval
+          cval.receive_key(ckey) if cval.is_a?(Structured)
+          obj.receive_any(ckey, cval)
         end
       end
     end
@@ -450,24 +451,53 @@ module Structured
       end
     end
 
-    # Deals with a nil value (either because no value was given, or because a
-    # preproc deleted it).
+
     #
-    # * If val is non-nil, then this method returns false.
+    # Given an element value and an #element_data hash of processing tools
+    # element, applies those processing tools. Namely, apply any preproc, check
+    # the type and perform other checks, and perform any conversions. The return
+    # value should be usable as the received value for the corresponding
+    # element.
+    #
+    # If this method returns nil, then there is no element to process. This
+    # method may also raise an InputError.
+    #
+    def process_value(obj, val, data)
+      val, ret = process_nil_val(val, data)
+      return val if ret
+      if data[:preproc]
+        val = try_run(data[:preproc], obj, val, "preproc")
+        val, ret = process_nil_val(val, data)
+        return val if ret
+      end
+
+      cval = convert_item(val, data[:type], obj)
+      if data[:check] && !try_run(data[:check], obj, cval, "check")
+        input_err "Value #{cval} failed check"
+      end
+      return cval
+    end
+
+    #
+    # Performs processing of an element value to deal with the possibility that
+    # the value is nil. This method returns [ the new value, boolean of whether
+    # to stop processing ] according to the following rules:
+    #
+    # * If val is non-nil, then this method returns val itself, and processing
+    #   should not stop.
     # * If val is nil and this element is non-optional, then this method raises
     #   an error.
-    # * If val is nil and the element is optional, *and* the element has a
-    #   default value, then the object has the default value applied to the
-    #   element.
-    # * In any event, if val is nil and the element is optional, returns true
-    #   which should signal to the caller to stop further processing of the
-    #   element.
+    # * If val is nil and the element is optional, then the object's default
+    #   value is returned, and processing should stop.
+    # * If there is no default value for an optional element, then nil is
+    #   returned, and processing should also stop.
     #
-    def process_nil_val(obj, elt, val, data)
-      return false if val
-      input_err("Missing (or preproc deleted) #{elt}") unless data[:optional]
-      apply_val(obj, elt, data[:default]) unless data[:default].nil?
-      return true
+    def process_nil_val(val, data)
+      return [ val, false ] if val
+      unless data[:optional]
+        input_err("Required element is missing (or was deleted by a preproc)")
+      end
+      return [ data[:default], true ]
     end
 
     # Applies a value to an element for an object, after all processing for the
@@ -542,10 +572,20 @@ module Structured
       end
     end
 
+    #
+    # Several types can be automatically converted:
+    #
+    # * Symbol into String
+    # * String into Regexp
+    #
     def try_autoconvert(type, item)
 
       if type == String && item.is_a?(Symbol)
         return item.to_s
+      end
+
+      if type == Symbol && item.is_a?(String)
+        return item.to_sym
       end
 
       # Special case in which strings will be converted to Regexps
@@ -563,7 +603,11 @@ module Structured
     # Receive hash values that are to be converted to Structured objects
     def convert_structured(item, type, parent)
       unless item.is_a?(Hash)
-        input_err("#{item.inspect} not a #{type} or Structured hash")
+        if type.include?(Structured)
+          input_err("#{item.inspect} not a Structured hash for #{type}")
+        else
+          input_err("#{item.inspect} not a #{type}")
+        end
       end
 
       unless type.include?(Structured) || type.include?(StructuredPolymorphic)
@@ -604,7 +648,8 @@ module Structured
 
       if @default_element
         io.puts(
-          "  All other elements: #{describe_type(@default_element[:type])}"
+          "  All other elements: #{describe_type(@default_key[:type])} => " \
+          "#{describe_type(@default_element[:type])}"
         )
         if @default_element[:description]
           io.puts(TextTools.line_break(

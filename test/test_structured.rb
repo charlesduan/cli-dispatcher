@@ -198,6 +198,29 @@ class StructuredTest < Minitest::Test
     assert_equal 3, a.items[:three]
   end
 
+  class ModDefaultItems
+    include Structured
+    default_element(Integer, key: {
+      type: String,
+      preproc: proc { |s| s + "!" },
+    })
+    def receive_any(key, val)
+      (@items ||= {})[key] = val
+    end
+    attr_reader :items
+  end
+
+  def test_mod_default
+    a = ModDefaultItems.new({ 'a' => 1 })
+    assert_instance_of(Hash, a.items)
+    assert_equal({ 'a!' => 1 }, a.items)
+  end
+
+  def test_mod_default_key_type
+    assert_raises(Structured::InputError) {
+      ModDefaultItems.new({ :a => 1 })
+    }
+  end
 
   class PreInitializer
     include Structured
