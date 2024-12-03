@@ -192,6 +192,9 @@ Additionally, a Structured class can produce documentation and template files
 for users. The Dispatcher class above can automatically add user-level commands
 for producing these.
 
+Finally, a Structured class allows for separating a YAML file into multiple
+sub-files, as described further in the documentation.
+
 
 # Text Tools
 

@@ -36,6 +36,8 @@ require 'yaml'
 # As a result, at the end of the initialization of a Structured object, it will
 # have instance variables set corresponding to all the defined elements.
 #
+# == Customization of Structured Classes
+#
 # The above explanation is default behavior, and several customizations are
 # available.
 #
@@ -57,6 +59,57 @@ require 'yaml'
 #
 # Please read the documentation for Structured::ClassMethods for more on
 # defining expected elements, type checking, and so on.
+#
+# == Subfiles as Input
+#
+# The Structured class provides automatic support for separating inputs into
+# YAML subfiles. This is useful for including complex objects in a file. Two
+# types of subfile inputs are supported: those for object hashes, and those for
+# arrays.
+#
+# To include a subfile as part of an object hash, include the key `read_file` in
+# the hash, with the value being the file to be read. (Other keys besides
+# `read_file` may be included.) The subfile should itself contain YAML for a
+# hash with further keys for the object.
+#
+# To include multiple subfiles in an array, set the first element of the array
+# to the string `read_file`, and then the other elements of the array should be
+# filenames. These subfiles should contain YAML for arrays.
+#
+# Consider a Structured object for a book, containing elements for the title,
+# subtitle, and an array of authors. The input file could look like this:
+#
+#   ---
+#   title: A Book
+#   subtitle: Containing Many Pages
+#   author:
+#     - John Q. Public
+#     - Jane Doe
+#
+# Using the subfile feature, the input file could instead look like:
+#
+#   ---
+#   title: A Book
+#   read_file: subtitle_file.yaml
+#   author:
+#     - read_file
+#     - author_file.yaml
+#
+# This would instruct Structured to read hash keys out of `subtitle_file.yaml`,
+# and to read array elements out of `author_file.yaml`. These two files, in
+# turn, should look like:
+#
+#   # subtitle_file.yaml
+#   ---
+#   subtitle: Containing Many Pages
+#
+#   # author_file.yaml
+#   ---
+#   - John Q. Public
+#   - Jane Doe
+#
+# When incorporated, Structured will combine these subfiles as if they were a
+# single object specification.
 #
 module Structured
 
@@ -289,7 +342,7 @@ module Structured
     def default_element(*args, **params)
       if (key_params = params.delete(:key))
         @default_key = element_data(
-          key_params.delete(:type) || Object, key_params
+          key_params.delete(:type) || Object, **key_params
         )
       else
         @default_key = element_data(Symbol, preproc: proc { |s| s.to_sym })
@@ -451,6 +504,21 @@ module Structured
       end
     end
 
+    def try_read_array(filenames)
+      new_item = []
+      begin
+        filenames.each do |file|
+          begin
+            res = YAML.load_file(file)
+            raise InputError unless res.is_a?(Array)
+            new_item.concat(res)
+          rescue
+            input_err("Failed to read array from #{file}: #$!")
+          end
+        end
+      end
+      return new_item
+    end
 
     #
     # Given an element value and an #element_data hash of processing tools
@@ -534,6 +602,7 @@ module Structured
       when Array
         input_err("#{item} is not Array") unless item.is_a?(Array)
         Structured.trace(Array) do
+          item = try_read_array(item[1..-1]) if item.first.to_s == 'read_file'
           return item.map.with_index { |i, idx|
             Structured.trace(idx) do
               convert_item(i, type.first, parent)
