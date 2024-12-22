@@ -1,4 +1,5 @@
 require 'optparse'
+require 'texttools'
 
 #
 # Constructs a program that can operate a number of user-provided commands. To
@@ -6,18 +7,23 @@ require 'optparse'
 #
 #   def cmd_name(args...)
 #
-# Then create an instance of the class and call one of the dispatch methods.
+# Then create an instance of the class and call one of the dispatch methods,
+# typically:
 #
-# To provide help for a command, define a method:
+#   [DispatcherSubclass].new.dispatch_argv
 #
-#   def help_name
+# To provide help and/or a category for a command, define the methods
 #
-# The first line should be a short description of the command, which will be
-# used in a summary table describing the command.
+#   def help_name; [string] end
+#   def cat_name;  [string] end
+#
+# For the help command, the first line should be a short description of the
+# command, which will be used in a summary table describing the command. For the
+# category, all commands with the same category will be grouped together in the
+# help summary display.
 #
 # This class incorporates optparse, providing the commands setup_options and
-# add_options to pass
-# through options specifications.
+# add_options to pass through options specifications.
 #
 class Dispatcher
 
@@ -118,11 +124,28 @@ class Dispatcher
     warn("Run 'help [command]' for further help on that command.")
     warn("")
 
-    methods.map { |m|
+    grouped_methods = methods.map { |m|
       s = m.to_s
       s.start_with?("cmd_") ? s.delete_prefix("cmd_") : nil
-    }.compact.sort.each do |cmd|
-      warn("%-10s %s" % [ cmd, help_string(cmd, all: false) ])
+    }.compact.group_by { |m|
+      cat_m = "cat_#{m}".to_sym
+      respond_to?(cat_m) ? send(cat_m) : nil
+    }
+    help_cmds(grouped_methods.delete(nil)) if grouped_methods.include?(nil)
+
+    grouped_methods.sort.each do |cat, cmds|
+      warn("\n#{cat}\n\n")
+      help_cmds(cmds)
+    end
+  end
+
+  def help_cmds(cmds)
+    cmds.sort.each do |cmd|
+      warn(TextTools.line_break(
+        help_string(cmd, all: false),
+        prefix: " " * 11,
+        first_prefix: cmd.ljust(10) + ' ',
+      ))
     end
   end
 

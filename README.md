@@ -12,8 +12,8 @@ YAML or other files, and text processing helpers.
 
 To use this, create an executable Ruby script containing a subclass of
 Dispatcher. The subclass should define methods `cmd_[name]` where `[name]`
-corresponds to each command that the script can perform. The arguments to these
-methods correspond to the arguments passed on the command line.
+corresponds to each subcommand that the script can perform. The arguments to
+these methods correspond to the arguments passed on the command line.
 
 Then, the script should create an instance of the class and call
 `dispatch_argv`.
@@ -64,15 +64,16 @@ information. A subclass defining the method `cmd_[name]` can also define
 `help_[name]`, which should return a string of help information.
 
 The first line of the help information should be a one-line summary of the
-command, with the remaining text explaining the command and its usage further:
+subcommand, with the remaining text explaining the command and its usage
+further:
 ```ruby
     def help_hello
         return "Prints a greeting.\n\nThe argument is the name of a person."
     end
 ```
-Running the subcommand `help` will generate a list of commands with appropriate
-help information, and `help [command]` will display the help text for the
-command:
+Running the subcommand `help` will generate a list of subcommands with
+appropriate help information, and `help [command]` will display the help text
+for the subcommand:
 ```
 > ./say.rb help hello
 Prints a greeting.
@@ -80,6 +81,25 @@ Prints a greeting.
 The argument is the name of a person.
 ```
 
+**Categorizing commands:** When a dispatcher has many subcommands, it may become
+difficult to navigate all the subcommands in the help listing. To alleviate
+this, subcommands may be associated with a category by defining a method
+`cat_[name]`, returning a string indicating the category:
+```ruby
+    def cat_hello
+        return "Text Commands"
+    end
+```
+The listing of subcommands will now organize the descriptions under categories:
+```
+> ./say help
+
+... [Other command help]
+
+Text Commands
+
+hello     Prints a greeting.
+```
 
 # Structured Input from YAML Files
 
