@@ -11,17 +11,41 @@ module TextTools
   def line_break(
     text, len: 80, prefix: '', first_prefix: nil, preserve_lines: false
   )
-    res = ''
+    res = String.new('')
+
+    #
+    # Remove single paragraph breaks (unless preserve_lines is on). After this,
+    # every paragraph break should be preserved. Also remove trailing
+    # whitespace, which causes problems.
+    #
     text = text.split(/\s*\n\s*\n\s*/).map { |para|
       preserve_lines ? para : para.gsub(/\s*\n\s*/, " ")
-    }.join("\n\n")
+    }.join("\n\n").rstrip
 
     cur_prefix = first_prefix || prefix
+
+    # Process each individual line separately.
+    while (line_match = /\s*\n\s*/.match(text))
+      res << one_line_break(line_match.pre_match, len, cur_prefix, prefix)
+      res << line_match[0].gsub(/[^\n]/, '')
+      cur_prefix = prefix
+      text = line_match.post_match
+    end
+    res << one_line_break(text, len, cur_prefix, prefix)
+    return res
+
+  end
+
+  #
+  # Line break a text that is guaranteed not to have any line breaks within it.
+  #
+  def one_line_break(text, len, first_prefix, prefix)
+    res = String.new('')
+    cur_prefix = first_prefix
     strlen = len - cur_prefix.length
     while text.length > strlen
-      if (m = /\A([^\n]{0,#{strlen}})(\s+)/.match(text))
-        res << cur_prefix + m[1]
-        res << (m[2].include?("\n") ? m[2].gsub(/[^\n]/, '') : "\n")
+      if (m = /\A(.{0,#{strlen}})(\s+)/.match(text))
+        res << cur_prefix + m[1] + "\n"
         text = m.post_match
       else
         res << cur_prefix + text[0, strlen] + "\n"
@@ -31,8 +55,6 @@ module TextTools
       strlen = len - cur_prefix.length
     end
 
-    # If there's no text left, then there were trailing spaces and the final \n
-    # is superfluous.
     if text.length > 0
       res << cur_prefix + text
     else
