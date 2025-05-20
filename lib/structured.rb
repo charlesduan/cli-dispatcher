@@ -561,7 +561,7 @@ module Structured
     #   returned, and processing should also stop.
     #
     def process_nil_val(val, data)
-      return [ val, false ] if val
+      return [ val, false ] unless val.nil?
       unless data[:optional]
         input_err("Required element is missing (or was deleted by a preproc)")
       end
