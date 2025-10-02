@@ -1,5 +1,7 @@
 require 'optparse'
 require 'texttools'
+require 'reline'
+require 'shellwords'
 
 #
 # Constructs a program that can operate a number of user-provided commands. To
@@ -31,12 +33,12 @@ class Dispatcher
   # Reads ARGV and dispatches a command. If no arguments are given, an
   # appropriate warning is issued and the program terminates.
   #
-  def dispatch_argv
+  def dispatch_argv(default_interactive = false)
     @option_parser ||= OptionParser.new
     add_options(@option_parser)
     @option_parser.banner = <<~EOF
-      Usage: #$0 [options] command [arguments...]
-      Run '#$0 help' for a list of commands.
+      Usage: #{File.basename($0)} [options] command [arguments...]
+      Run '#{File.basename($0)} help' for a list of commands.
 
       Options:
     EOF
@@ -48,35 +50,39 @@ class Dispatcher
     end
 
     @option_parser.parse!
-    if ARGV.empty?
+    if !ARGV.empty?
+      exit dispatch(*ARGV) ? 0 : 1
+    elsif default_interactive
+      cmd_interactive
+    else
       STDERR.puts(@option_parser)
       exit 1
     end
-    dispatch(*ARGV)
   end
 
   #
   # Dispatches a single command with given arguments. If the command is not
-  # found, then issues a help warning.
+  # found, then issues a help warning. Returns true or false depending on
+  # whether the command executed successfully.
   #
   def dispatch(cmd, *args)
     cmd_sym = "cmd_#{cmd}".to_sym
     begin
       if respond_to?(cmd_sym)
         send(cmd_sym, *args)
+        return true
       else
-        warn("Usage: #$0 [options] command [arguments...]")
-        warn("Run '#$0 help' for a list of commands.")
-        exit(1)
+        warn("Unknown command #{cmd_sym}. Run 'help' for a list of commands.")
+        return false
       end
     rescue ArgumentError
       if $!.backtrace_locations.first.base_label == cmd_sym.to_s
-        warn("#{cmd}: wrong number of arguments")
+        warn("#{cmd}: wrong number of arguments.")
         warn("Usage: #{signature_string(cmd)}")
-        exit(1)
       else
-        raise $!
+        raise
       end
+      return false
     end
   end
 
@@ -143,11 +149,47 @@ class Dispatcher
     cmds.sort.each do |cmd|
       warn(TextTools.line_break(
         help_string(cmd, all: false),
-        prefix: " " * 11,
-        first_prefix: cmd.ljust(10) + ' ',
+        prefix: " " * 12,
+        first_prefix: cmd.ljust(11) + ' ',
       ))
     end
   end
+
+  def help_interactive
+    return "Start an interactive shell for entering commands."
+  end
+
+  #
+  # Runs the dispatcher in interactive mode, in which command lines are read
+  # from a prompt.
+  #
+  def cmd_interactive
+    stty_save = `stty -g`.chomp
+    loop do
+      begin
+        buf = Reline.readline(interactive_prompt, true)
+        exit unless buf
+        args = buf.shellsplit
+        next if args.empty?
+        exit if args.first == 'exit'
+        dispatch(*args)
+      rescue Interrupt
+        system("stty", stty_save)
+        exit
+      rescue
+        STDERR.puts $!.full_message
+      end
+    end
+  end
+
+  #
+  # Returns the string for the interactive prompt. Subclasses can override this
+  # method to offer more detailed prompts.
+  #
+  def interactive_prompt
+    return "#{File.basename($0)}> "
+  end
+
 
   #
   # Adds commands relevant when this dispatcher uses Structured data inputs.
