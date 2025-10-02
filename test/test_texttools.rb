@@ -53,6 +53,15 @@ class TextToolsTest < Minitest::Test
     )
   end
 
+  def test_line_break_preserve_breaks_short
+    assert_equal(
+      "--Line\n--break text",
+      line_break(
+        "Line\nbreak text", len: 30, preserve_lines: true, prefix: "--"
+      )
+    )
+  end
+
   def test_line_break_trailing_spaces
     assert_equal(
       "line break\ntext",

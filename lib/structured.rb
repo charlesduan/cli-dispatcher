@@ -779,7 +779,7 @@ module Structured
     # @param indent The indent string before new lines.
     # @param sp Spacing after the colon, if any.
     def template_type(type, indent, sp = ' ')
-      res = ''
+      res = String.new('')
       case type
       when :boolean
         res << " true/false\n"
