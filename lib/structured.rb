@@ -461,7 +461,7 @@ module Structured
         Structured.trace(key.to_s) do
           val = hash[key] || hash[key.to_s]
           cval = process_value(obj, val, data)
-          apply_val(obj, key, cval) if cval
+          apply_val(obj, key, cval) unless cval.nil?
         end
       end
 

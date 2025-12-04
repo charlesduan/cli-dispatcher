@@ -355,6 +355,22 @@ class StructuredTest < Minitest::Test
     assert_equal([ 'key' ], ac.table.keys)
   end
 
+  class DefaultFalseValue
+    include Structured
+
+    element :optval, :boolean, optional: true, default: false
+  end
+
+  def test_default_false_given
+    dfv = DefaultFalseValue.new({ optval: true })
+    assert_kind_of TrueClass, dfv.optval
+  end
+
+  def test_default_false_inferred
+    dfv = DefaultFalseValue.new({})
+    assert_kind_of FalseClass, dfv.optval
+  end
+
 
 end
 
