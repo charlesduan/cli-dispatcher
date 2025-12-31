@@ -19,6 +19,10 @@ class StructuredTest < Minitest::Test
     end
   end
 
+  def test_book_subtypes
+    assert_equal([], Book.subtypes)
+  end
+
   def test_book
     b = Book.new({ 'title' => 'War and Peace' })
     assert_equal('War and Peace', b.instance_variable_get(:@title))
@@ -74,6 +78,10 @@ class StructuredTest < Minitest::Test
     include Structured
     element :books, [ Book ]
   end
+
+  def test_arrayitem_subtypes
+    assert_equal([ Book ], ArrayItem.subtypes)
+  end
   def test_arrayitems
     x = ArrayItem.new({
       'books' => [
@@ -96,6 +104,9 @@ class StructuredTest < Minitest::Test
     include Structured
     element :strhash, { String => String }
     element :objhash, { String => Book }
+  end
+  def test_hashitem_subtypes
+    assert_equal([ Book ], HashItems.subtypes)
   end
   def test_hashitems
     x = HashItems.new(
@@ -250,6 +261,10 @@ class StructuredTest < Minitest::Test
       @adult_books = {}
     end
     attr_reader :adult_books
+  end
+
+  def test_bookshelf_subtypes
+    assert_equal([ Book ], BookShelf.subtypes)
   end
 
   def test_hierarchy

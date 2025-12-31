@@ -745,6 +745,18 @@ module Structured
     end
 
     #
+    # Returns a list of all Structured types that are in elements of this class.
+    #
+    def subtypes
+      datas = @elements.values
+      datas << @default_element if @default_element
+      res = datas.map { |data|
+        data[:type].is_a?(Hash) ? data[:type].first : data[:type]
+      }.flatten.select { |c| c.is_a?(Class) && c.include?(Structured) }.uniq
+    end
+
+
+    #
     # Produces a template YAML file for this Structured object.
     def template(indent: '')
       res = "#{indent}# #{name}\n"

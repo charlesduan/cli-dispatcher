@@ -27,6 +27,12 @@ class PolymorphicTest < Minitest::Test
     end
   end
 
+  def test_subtypes
+    assert_equal(2, Thing.subtypes.count)
+    assert_includes(Thing.subtypes, Book)
+    assert_includes(Thing.subtypes, Car)
+  end
+
   def test_polymorphic_car
     t = Thing.new(:type => 'car', :model => 'Toyota')
     assert_instance_of(Car, t)
