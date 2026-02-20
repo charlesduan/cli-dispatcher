@@ -353,11 +353,15 @@ class StructuredTest < Minitest::Test
     element :regexp, Regexp, optional: true
     element :str, String, optional: true
     element :table, { String => Integer }, optional: true
+    element :date, Date, optional: true
   end
 
   def test_autoconv_regexp
     ac = AutoConversion.new({ regexp: "abc\\s+def" })
     assert_equal(/abc\s+def/, ac.regexp)
+    assert_raises(Structured::InputError) do
+      AutoConversion.new({ regexp: '*' })
+    end
   end
 
   def test_autoconv_string
@@ -368,6 +372,15 @@ class StructuredTest < Minitest::Test
   def test_autoconv_hash_string
     ac = AutoConversion.new({ :table => { :key => 15 } })
     assert_equal([ 'key' ], ac.table.keys)
+  end
+
+  def test_autoconv_date
+    ac = AutoConversion.new({ date: '2005-12-15' })
+    assert_instance_of Date, ac.date
+    assert_equal Date.new(2005, 12, 15), ac.date
+    assert_raises(Structured::InputError) do
+      AutoConversion.new({ date: 'foobar' })
+    end
   end
 
   class DefaultFalseValue
