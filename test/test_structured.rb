@@ -19,6 +19,10 @@ class StructuredTest < Minitest::Test
     end
   end
 
+  def test_book_subtypes
+    assert_equal([], Book.subtypes)
+  end
+
   def test_book
     b = Book.new({ 'title' => 'War and Peace' })
     assert_equal('War and Peace', b.instance_variable_get(:@title))
@@ -74,6 +78,10 @@ class StructuredTest < Minitest::Test
     include Structured
     element :books, [ Book ]
   end
+
+  def test_arrayitem_subtypes
+    assert_equal([ Book ], ArrayItem.subtypes)
+  end
   def test_arrayitems
     x = ArrayItem.new({
       'books' => [
@@ -96,6 +104,9 @@ class StructuredTest < Minitest::Test
     include Structured
     element :strhash, { String => String }
     element :objhash, { String => Book }
+  end
+  def test_hashitem_subtypes
+    assert_equal([ Book ], HashItems.subtypes)
   end
   def test_hashitems
     x = HashItems.new(
@@ -269,6 +280,10 @@ class StructuredTest < Minitest::Test
     attr_reader :adult_books
   end
 
+  def test_bookshelf_subtypes
+    assert_equal([ Book ], BookShelf.subtypes)
+  end
+
   def test_hierarchy
     b = BookShelf.new({
       kids_books: {
@@ -355,11 +370,15 @@ class StructuredTest < Minitest::Test
     element :regexp, Regexp, optional: true
     element :str, String, optional: true
     element :table, { String => Integer }, optional: true
+    element :date, Date, optional: true
   end
 
   def test_autoconv_regexp
     ac = AutoConversion.new({ regexp: "abc\\s+def" })
     assert_equal(/abc\s+def/, ac.regexp)
+    assert_raises(Structured::InputError) do
+      AutoConversion.new({ regexp: '*' })
+    end
   end
 
   def test_autoconv_string
@@ -370,6 +389,15 @@ class StructuredTest < Minitest::Test
   def test_autoconv_hash_string
     ac = AutoConversion.new({ :table => { :key => 15 } })
     assert_equal([ 'key' ], ac.table.keys)
+  end
+
+  def test_autoconv_date
+    ac = AutoConversion.new({ date: '2005-12-15' })
+    assert_instance_of Date, ac.date
+    assert_equal Date.new(2005, 12, 15), ac.date
+    assert_raises(Structured::InputError) do
+      AutoConversion.new({ date: 'foobar' })
+    end
   end
 
   class DefaultFalseValue

@@ -111,6 +111,10 @@ module StructuredPolymorphic
       end
     end
 
+    def subtypes
+      return @subclasses.values
+    end
+
     def template(indent: '')
       res = "#{indent}# #{name}\n"
       if @class_description

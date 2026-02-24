@@ -1,5 +1,6 @@
 require_relative 'texttools'
 require 'yaml'
+require 'date'
 
 #
 # Sets up a class to receive an initializing hash and to populate information
@@ -649,20 +650,26 @@ module Structured
     #
     def try_autoconvert(type, item)
 
-      if type == String && item.is_a?(Symbol)
+      case { item.class => type }
+
+      when { Symbol => String }
         return item.to_s
-      end
 
-      if type == Symbol && item.is_a?(String)
+      when { String => Symbol }
         return item.to_sym
-      end
 
-      # Special case in which strings will be converted to Regexps
-      if type == Regexp && item.is_a?(String)
+      when { String => Regexp }
         begin
           return Regexp.new(item)
         rescue RegexpError
           input_err("#{item} is not a valid regular expression")
+        end
+
+      when { String => Date }
+        begin
+          return Date.parse(item)
+        rescue Date::Error
+          input_err("#{item} is not a valid date")
         end
       end
 
@@ -743,6 +750,18 @@ module Structured
       else return type.to_s
       end
     end
+
+    #
+    # Returns a list of all Structured types that are in elements of this class.
+    #
+    def subtypes
+      datas = @elements.values
+      datas << @default_element if @default_element
+      return datas.map { |data|
+        data[:type].is_a?(Hash) ? data[:type].first : data[:type]
+      }.flatten.select { |c| c.is_a?(Class) && c.include?(Structured) }.uniq
+    end
+
 
     #
     # Produces a template YAML file for this Structured object.

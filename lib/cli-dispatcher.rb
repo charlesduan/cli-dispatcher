@@ -193,22 +193,58 @@ class Dispatcher
 
   #
   # Adds commands relevant when this dispatcher uses Structured data inputs.
+  # This method allows for generating documentation on Structured classes.
+  #
+  # The calling class should implement a method explain_classes that lists at
+  # least one Structured class that can be explained.
   #
   def self.add_structured_commands
     def help_explain
       return <<~EOF
         Displays an explanation of a Structured class.
 
-        Use this to assist in generating or checking a Rubric file.
+        This will produce documentation on the elements permitted within the
+        class. If no class is given, then a listing of known Structured classes
+        is produced.
       EOF
     end
 
-    def cmd_explain(class_name)
+    def cmd_explain(class_name = nil)
+      if class_name.nil?
+        cache = {}
+        puts "The following are Structured classes known to this program. Run"
+        puts "the command \"explain [class]\" for documentation on any of them."
+        puts
+        explain_classes.each do |c|
+          list_classes(c, cache)
+        end
+        return
+      end
+
       c = Object.const_get(class_name)
-      unless c.is_a?(Class) && c.include?(Structured)
+      if c.is_a?(Class) && c.include?(Structured)
+        c.explain
+      else
         raise "Invalid class #{class_name}"
       end
-      c.explain
+    end
+
+    unless defined? explain_classes
+      def explain_classes
+        return []
+      end
+    end
+
+    def list_classes(c, cache, level = 0)
+      unless c.include?(Structured)
+        raise "Cannot list classes of a non-Structured class"
+      end
+      puts(("  " * level) + c.to_s)
+      return if cache.include?(c)
+      cache[c] = true
+      c.subtypes.each do |sc|
+        list_classes(sc, cache, level + 1)
+      end
     end
 
     def help_template
