@@ -161,6 +161,23 @@ class StructuredTest < Minitest::Test
     assert_equal 3, a.items[:three]
   end
 
+  class DefaultObjectItems
+    include Structured
+    default_element Object
+    def receive_any(key, val)
+      (@items ||= {})[key] = val
+    end
+    attr_reader :items
+  end
+
+  def test_default_false
+    a = DefaultObjectItems.new({ one: false, two: true })
+    assert_includes a.items, :one
+    assert_kind_of FalseClass, a.items[:one]
+    assert_includes a.items, :two
+    assert_kind_of TrueClass, a.items[:two]
+  end
+
   class ModDefaultItems
     include Structured
     default_element(Integer, key: {

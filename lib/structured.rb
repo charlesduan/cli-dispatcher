@@ -476,7 +476,7 @@ module Structured
           val = hash[key]
           ckey = process_value(obj, key, @default_key)
           cval = process_value(obj, val, @default_element)
-          next unless cval
+          next if cval.nil?
           cval.receive_key(ckey) if cval.is_a?(Structured)
           obj.receive_any(ckey, cval)
         end
